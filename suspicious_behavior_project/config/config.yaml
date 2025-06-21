@@ -1,0 +1,50 @@
+# Video Analytics System Configuration
+
+# Camera Settings
+camera:
+  # Input source (0 for webcam, path for video file, RTSP URL for IP camera)
+  source: 0
+  # Frame processing settings
+  frame:
+    width: 1280
+    height: 720
+    fps: 30
+    skip_frames: 1  # Process every nth frame
+
+# YOLOv5 Model Settings
+model:
+  type: "yolov5"
+  # Model weights and architecture
+  weights: "yolov5m.pt"
+  architecture: "yolov5m"
+  # Inference settings
+  confidence_threshold: 0.45
+  iou_threshold: 0.45
+  # GPU settings
+  device: "cuda:0"
+  half_precision: true
+
+# DeepSORT Tracking Settings
+tracking:
+  max_age: 30  # Maximum number of frames to keep track without detections
+  min_hits: 3  # Minimum number of frames to confirm a track
+  iou_threshold: 0.3
+  appearance_model: "osnet_x0_25_msmt17"
+  feature_dim: 512
+
+# Loitering Analysis Settings
+loitering_analysis:
+  # Time thresholds
+  time_threshold_seconds: 180  # Minimum time in ROI to trigger alert
+  # Trajectory analysis
+  trajectory_efficiency_threshold: 0.3  # Threshold for loitering detection
+  # Regions of Interest
+  regions_of_interest:
+    - name: "Main_Entrance_ROI"
+      points: [[100, 150], [400, 150], [400, 450], [100, 450]]
+    - name: "Sensitive_Area_ROI"
+      points: [[500, 200], [700, 200], [700, 400], [500, 400]]
+  # Alert settings
+  alert:
+    cooldown: 300  # Minimum time (seconds) between alerts
+    threshold: 0.8  # Confidence threshold for alert

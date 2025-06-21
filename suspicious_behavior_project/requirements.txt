@@ -1,0 +1,24 @@
+# PyTorch with CUDA 12.1 support
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python>=4.8.0  # OpenCV for video processing
+numpy>=1.24.0  # Numerical operations
+pyyaml>=6.0.0  # YAML configuration support
+scipy>=1.10.0  # Scientific computing
+filterpy>=1.4.5  # Kalman filters and other filtering algorithms
+imutils>=0.5.4  # Additional image processing utilities
+tqdm>=4.65.0  # Progress bar for long operations
+torchaudio>=2.1.0
+# OpenCV with CUDA support
+opencv-python-headless>=4.8.0
+opencv-contrib-python-headless>=4.8.0
+# DeepSORT dependencies
+lap>=0.4.0
+# Configuration and data handling
+pandas>=2.0.0
+scikit-learn>=1.3.0
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+# Utility libraries
+pillow>=10.0.0
