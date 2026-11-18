@@ -13,7 +13,7 @@ echo "==========================================================================
 echo " 🛡️ TÜBİTAK 2209-A Hibrit Şüpheli Davranış ve Adil Yüz Tanıma Sistemi"
 echo "=============================================================================="
 
-# 1. Ensure uv or Python 3.11+ venv is available
+# 1. Ensure uv is available
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v uv >/dev/null 2>&1; then
     echo "[1/4] Hızlı Python paket yöneticisi (uv) kuruluyor..."
@@ -30,21 +30,26 @@ fi
 if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5" >/dev/null 2>&1; then
     echo "[3/4] Gerekli yapay zeka ve bulut kütüphaneleri yükleniyor..."
     if command -v nvidia-smi >/dev/null 2>&1; then
-        uv pip install --python ./venv/bin/python torch torchvision
+        uv pip install --python ./venv/bin/python -r requirements.txt
     else
-        uv pip install --python ./venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        uv pip install --python ./venv/bin/python \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            --index-strategy unsafe-best-match \
+            "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" -r requirements.txt || \
+        uv pip install --python ./venv/bin/python -r requirements.txt
     fi
-    uv pip install --python ./venv/bin/python -r requirements.txt
     uv pip uninstall --python ./venv/bin/python opencv-python-headless opencv-contrib-python-headless 2>/dev/null || true
     uv pip install --python ./venv/bin/python "setuptools>=68.0.0,<80.0.0" "opencv-python>=4.8.0,<5.0.0"
 else
     echo "[3/4] Bağımlılıklar hazır ✅"
 fi
 
-# 3. Start Milvus Standalone container if Docker is running
+# 3. Start Milvus Standalone container if Docker is running and milvus image is cached
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    echo "[Opsiyonel] Docker tespit edildi — Milvus Standalone kontrol ediliyor..."
-    docker compose up -d 2>/dev/null || true
+    if docker images -q milvusdb/milvus:v2.4.15 2>/dev/null | grep -q .; then
+        echo "[Opsiyonel] Milvus Standalone konteyneri başlatılıyor..."
+        docker compose up -d 2>/dev/null || true
+    fi
 fi
 
 echo "[4/4] Sistem başlatılıyor (Web Paneli: http://localhost:8000)..."
