@@ -77,6 +77,7 @@ class PersonDetector:
         self.iou_threshold = float(iou_threshold)
         self.target_classes = target_classes or ["person"]
         self.last_detections_with_conf: List[Tuple[int, int, int, int, float]] = []
+        self.last_bag_detections: List[Tuple[int, int, int, int, float, str]] = []
 
         if device in ("auto", "", None):
             resolved_device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -127,7 +128,8 @@ class PersonDetector:
             self.model.conf = self.confidence_threshold
             self.model.iou = self.iou_threshold
             self.model.max_det = 60
-            self.model.classes = [0]  # COCO class 0 = person
+            # COCO classes: 0=person, 24=backpack, 26=handbag, 28=suitcase
+            self.model.classes = [0, 24, 26, 28]
             self.model.amp = False
 
             stride = int(getattr(self.model, "stride", 32))
@@ -191,14 +193,16 @@ class PersonDetector:
                     pred,
                     conf_thres=self.model.conf,
                     iou_thres=self.model.iou,
-                    classes=[0],
+                    classes=[0, 24, 26, 28],
                     max_det=self.model.max_det,
                 )
 
             results: List[Tuple[int, int, int, int, float]] = []
+            bag_results: List[Tuple[int, int, int, int, float, str]] = []
             if not nms_out or nms_out[0] is None or len(nms_out[0]) == 0:
                 results = self._detect_closeup_webcam_person(frame)
                 self.last_detections_with_conf = results
+                self.last_bag_detections = []
                 return results
 
             boxes = nms_out[0].detach().cpu().numpy()
@@ -206,6 +210,7 @@ class PersonDetector:
                 boxes[:, :4], (orig_h, orig_w), ratio, (dw, dh)
             )
 
+            bag_class_names = {24: "Backpack", 26: "Handbag", 28: "Suitcase"}
             for box in boxes:
                 if len(box) >= 6:
                     xmin, ymin, xmax, ymax, conf, cls = box[:6]
@@ -215,8 +220,9 @@ class PersonDetector:
                         int(round(xmax)),
                         int(round(ymax)),
                     )
+                    cls_i = int(cls)
                     if (
-                        int(cls) == 0
+                        cls_i == 0
                         and float(conf) >= self.model.conf
                         and xmax_i - xmin_i >= 12
                         and ymax_i - ymin_i >= 20
@@ -224,8 +230,16 @@ class PersonDetector:
                         results.append(
                             (xmin_i, ymin_i, xmax_i, ymax_i, float(conf))
                         )
+                    elif cls_i in bag_class_names and float(conf) >= 0.35:
+                        bag_results.append(
+                            (xmin_i, ymin_i, xmax_i, ymax_i, float(conf), bag_class_names[cls_i])
+                        )
+
+            if not results:
+                results = self._detect_closeup_webcam_person(frame)
 
             self.last_detections_with_conf = results
+            self.last_bag_detections = bag_results
             return results
         except Exception as e:
             print(f"[PersonDetector] Inference warning: {e}")

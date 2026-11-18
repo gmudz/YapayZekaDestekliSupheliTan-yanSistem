@@ -300,6 +300,7 @@ def main():
     fps = 25.0
     frame_idx = 0
     watchlist_matches: Dict[int, Dict[str, Any]] = {}
+    last_bag_cloud_alert: Dict[int, float] = {}
     sim_clock = time.time()
     live_webcam_enrolled = False
 
@@ -430,6 +431,7 @@ def main():
             if ctrl.get("force_trigger_alert") and tracked_objects:
                 ctrl["force_trigger_alert"] = False
                 target_trk = tracked_objects[0]
+                target_trk["behavior_status"] = "LOITERING"
                 alerts.append(
                     {
                         "message": f"ALERT: Person ID {target_trk['track_id']} loitering in Main_Entrance_ROI (Manual Test)",
@@ -444,10 +446,51 @@ def main():
                     }
                 )
 
-            # 4. KVKK Privacy Bridge -> Cloud Layer (ArcFace 512-D + Milvus Watchlist Search)
+            # Keep an untouched copy of the frame for Cloud Layer suspect face cropping
+            clean_frame_for_cloud = frame.copy()
+
+            # 4. Smart AI Extensions (KVKK Dynamic Face Blur, Pose Skeleton, Heatmap, Future Trajectory, Abandoned Objects)
+            smart_engine = getattr(cloud_engine, "smart_engine", None)
+            if smart_engine is not None:
+                smart_engine.apply_dynamic_kvkk_masking(frame, tracked_objects)
+                pre_breach_warnings = smart_engine.update_and_draw_heatmap_and_predictions(
+                    frame, tracked_objects, behavior_analyzer.rois
+                )
+                smart_engine.analyze_and_draw_pose_actions(frame, tracked_objects)
+                bag_alerts = smart_engine.update_and_draw_abandoned_objects(
+                    frame,
+                    getattr(detector, "last_bag_detections", []),
+                    tracked_objects,
+                    current_time=sim_clock,
+                )
+                track_pose_map = {t["track_id"]: t.get("pose_action", "STANDING (BEKLEME)") for t in tracked_objects}
+                for a in alerts:
+                    a["pose_action"] = track_pose_map.get(a.get("track_id"), "STANDING (BEKLEME)")
+                for ba in bag_alerts:
+                    owner_id = ba.get("owner_track_id", 0)
+                    owner_trk = next((t for t in tracked_objects if t["track_id"] == owner_id), tracked_objects[0] if tracked_objects else None)
+                    last_bag_ts = last_bag_cloud_alert.get(owner_id, 0.0)
+                    should_send_bag = (sim_clock - last_bag_ts) >= 20.0
+                    if should_send_bag:
+                        last_bag_cloud_alert[owner_id] = sim_clock
+                    alerts.append(
+                        {
+                            "message": ba["message"],
+                            "track_id": owner_id,
+                            "roi_name": f"Abandoned_{ba['class_name']}",
+                            "dwell_time": ba["unattended_seconds"],
+                            "efficiency": 0.05,
+                            "bbox": owner_trk["bbox"] if owner_trk else ba["bbox"],
+                            "pose_action": "ABANDONED_OBJECT (TERK EDILMIS NESNE)",
+                            "timestamp": sim_clock,
+                            "should_send_to_cloud": should_send_bag,
+                        }
+                    )
+
+            # 5. KVKK Privacy Bridge -> Cloud Layer (ArcFace 512-D + Milvus Watchlist Search + Gemini VLM)
             for alert in alerts:
                 if alert.get("should_send_to_cloud"):
-                    cloud_res = privacy_bridge.dispatch_suspicious_event(frame, alert)
+                    cloud_res = privacy_bridge.dispatch_suspicious_event(clean_frame_for_cloud, alert)
                     if cloud_res.get("watchlist_hit") and cloud_res.get("best_match"):
                         watchlist_matches[alert["track_id"]] = cloud_res["best_match"]
                         bm = cloud_res["best_match"]
@@ -457,7 +500,7 @@ def main():
                             f"Risk={bm['risk_level']})"
                         )
 
-            # 5. Annotate Frame for OpenCV GUI & Web Dashboard Stream
+            # 6. Annotate Frame for OpenCV GUI & Web Dashboard Stream
             behavior_analyzer.draw_roi(frame)
             draw_detections(frame, tracked_objects, watchlist_matches=watchlist_matches)
 

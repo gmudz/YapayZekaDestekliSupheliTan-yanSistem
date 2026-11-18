@@ -29,6 +29,7 @@ pydantic>=2.6.0
 jinja2>=3.1.3
 websockets>=12.0
 pymilvus>=2.4.0
+google-genai>=2.30.1
 
 # Veri Analizi, Yapılandırma ve Görselleştirme
 pyyaml>=6.0.0

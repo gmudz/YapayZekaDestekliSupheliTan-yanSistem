@@ -150,6 +150,41 @@ flowchart TD
 
 ---
 
+## 🟢 الشريحة 7: وحدات الذكاء الاصطناعي المتقدمة الست (`modules/smart_analytics.py`)
+
+تم تعزيز النظام بـ **6 وحدات ذكاء اصطناعي متقدمة** تعمل في الزمن الحقيقي ويمكن التحكم بها بنقرة واحدة من لوحة تحكم **Stitch**:
+
+### 1. 🛡️ التمويه الديناميكي للوجوه وفق قانون KVKK (`Dynamic KVKK Face Masking`)
+- يقوم النظام تلقائياً بتغبيش/تمويه (`Pixelate Mask`) وجوه جميع الأشخاص الطبيعيين (`NORMAL` أو `IN_ROI`) على البث المباشر لحماية خصوصيتهم البيومترية مع عرض شارة `KVKK MASKED`.
+- بمجرد تحول حالة الشخص إلى مشتبه به بالتسكع (`LOITERING`)، **يُرفع التمويه عن وجهه وحده تلقائياً** (`KVKK: ŞÜPHELİ YÜZ AÇIK`) ويتم إرسال لقطته الصافية إلى السحابة للمطابقة في `Milvus`.
+
+### 2. 🔮 التنبؤ المسبق بالمسار (3 ثوانٍ) والخريطة الحرارية الحية (`Trajectory Prediction & Live Heatmap`)
+- **التنبؤ المسبق بالمسار (`3s Lookahead Vector`):** يستخدم متجه السرعة في مرشح كالمان لرسم سهم مستقبلي يوضح أين سيكون الشخص بعد `3` ثوانٍ ($\hat{\mathbf{p}}_{t+3\text{s}} = \mathbf{p}_t + \mathbf{v}_t \Delta t$). وإذا كان المسار المتوقع يخترق منطقة محظورة، يطلق النظام **تحذيراً استباقياً قبل الدخول (`PRE-BREACH WARNING`)**.
+- **الخريطة الحرارية الحية (`Live Crowd Density Heatmap`):** تراكم مكاني بطيف `TURBO` يُظهر المناطق الأكثر كثافة وتواجداً للأشخاص فوق الفيديو المباشر.
+
+### 3. 🦴 تحليل الهيكل العظمي ووضعية الجسد والحركات الشاذة (`Pose Skeleton & Action Anomaly`)
+- رسم شبكة مفاصل الجسم (`14-Bone Cybernetic Pose Skeleton`) داخل إطار كل شخص وتصنيف حركته لحظياً إلى:
+  - `STANDING (BEKLEME)` / `WALKING (YÜRÜME)`
+  - `CROUCHING / SNEAKING (EĞİLME / SIZMA)` — عند الانحناء غير الطبيعي داخل المنطقة الحساسة
+  - `FALL_DETECTED (ACİL DÜŞME!)` — عند السقوط المفاجئ على الأرض
+  - `RAPID / AGGRESSIVE MOTION` — عند الحركة العنيفة أو الركض المفاجئ
+
+### 4. 🎒 كشف الحقائب والأجسام المتروكة (`Abandoned Object / Luggage Detection`)
+- يكتشف النظام الحقائب (`Backpack`, `Handbag`, `Suitcase`) في نفس تمريرة `YOLOv5m` دون أي عبء حسابي إضافي، ويربط كل حقيبة بأقرب شخص (`Owner Track ID`).
+- إذا ابتعد صاحب الحقيبة عنها ($\text{Distance} > 150\text{ px}$) وبقيت الحقيبة بلا صاحب لمدة تتجاوز العتبة الزمنية، يطلق النظام إنذار **`TERK EDİLMİŞ NESNE (Abandoned Object Alert)`** باللون الأحمر مع تحديد هوية صاحبها! (يتوفر أيضاً زر محاكاة فوري `🎒 Terk Edilmiş Çanta Testi` في لوحة التحكم).
+
+### 5. 🛡️ كشف التزييف الحيوي للوجه (`Face Anti-Spoofing / Liveness Check`)
+- يفحص الوجه المحاذى (`112x112`) عبر تباين الترددات العالية (`Laplacian Sharpness Variance`)، وكشف انعكاس الشاشات (`Specular Glare`)، وإنتروبيا الألوان `HSV` للتمييز بين:
+  - `GERÇEK CANLI YÜZ (Real Live Face)`
+  - `SAHTE / EKRAN ŞÜPHESİ (Spoof / Screen Attack)`
+
+### 6. 🧠 محلل المشهد بالذكاء الاصطناعي (`Gemini 3.8 Flash VLM`) + البحث الجنائي النصي + التنبيه الصوتي وتلغرام
+- **تحليل الملابس والمشهد (`Visual Attributes & Gemini 3.8 Flash`):** يستخرج لون الملابس العلوية والسفلية (`Siyah`, `Beyaz`, `Gri`, `Mavi`...) ووضعية الجسد، ويولّد تقريراً أمنياً ذكياً عبر `gemini-3.8-flash` (أو المحرك المحلي السريع).
+- **البحث الجنائي النصي (`Forensic Natural Language Search`):** شريط بحث فوري في لوحة التحكم يتيح البحث بأي وصف نصي (مثل: `"Siyah"`, `"Main_Entrance"`, `"STANDING"`, `"WL-LIVE-CAM"`).
+- **الإنذار الصوتي الآلي (`Voice TTS Alert`) وإشعارات `Telegram`:** نطق صوتي آلي باللغة التركية عند رصد تطابق في القائمة الحمراء، مع زر إرسال التقرير الفوري إلى بوت **Telegram**.
+
+---
+
 ## 🚀 التشغيل الفوري بنقرة واحدة / Tek Komutla Çalıştırma
 
 صُمم المشروع ليشتغل لدى أي مستخدم على أي جهاز (**Linux**, **macOS**, أو **Windows**) بأمر واحد فقط دون أي إعدادات معقدة:
@@ -205,7 +240,8 @@ YapayZekaDestekliSupheliTan-yanSistem/
     │   ├── privacy_bridge.py           # جسر الخصوصية KVKK 6698 لتقليل البيانات بين الحافة والسحابة
     │   ├── face_recognizer.py          # استخراج متجهات 512-D ArcFace ومعايرة العدالة FairFace
     │   ├── vector_db.py                # عميل قاعدة بيانات المتجهات Milvus Standalone (COSINE)
-    │   └── fairness_evaluator.py       # محرك تقييم أهداف TÜBİTAK الأربعة والتدريب الدقيق على FairFace
+    │   ├── fairness_evaluator.py       # محرك تقييم أهداف TÜBİTAK الأربعة والتدريب الدقيق على FairFace
+    │   └── smart_analytics.py          # وحدات الذكاء المتقدمة الست (KVKK Mask, Heatmap, Pose, Abandoned Bag, Liveness, Gemini/Search)
     ├── cloud/
     │   ├── server.py                   # خادم FastAPI لطبقة السحابة والبث الحي وواجهات التحكم
     │   └── dashboard.html              # لوحة التحكم الحديثة المصممة عبر Google Stitch MCP

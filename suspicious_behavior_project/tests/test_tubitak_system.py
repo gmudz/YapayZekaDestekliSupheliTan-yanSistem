@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 import cv2
 import numpy as np
 import pytest
@@ -18,6 +19,7 @@ from modules.behavior_analyzer import BehaviorAnalyzer
 from modules.face_recognizer import FairFaceRecognizer
 from modules.vector_db import MilvusWatchlistDB
 from modules.fairness_evaluator import TubitakEvaluationSuite
+from modules.smart_analytics import SmartIntelligenceEngine
 
 
 def test_yolov5_person_detection_on_demo_cctv():
@@ -129,3 +131,76 @@ def test_all_four_tubitak_targets_pass():
     assert report["hedef_2_behavior"]["f1_score"] >= 0.80
     assert report["hedef_3_face_recognition"]["fairface_frr_percent"] < 5.0
     assert report["hedef_4_fairness"]["disparity_reduction_percent"] >= 25.0
+
+
+def test_all_six_smart_intelligence_extensions():
+    """Verify all 6 Smart AI Extensions (KVKK Masking, Heatmap/Prediction, Pose, Abandoned Bag, Anti-Spoofing, Forensic Search)."""
+    engine = SmartIntelligenceEngine(width=1280, height=720)
+    engine.heatmap_enabled = True
+    engine.trajectory_prediction_enabled = True
+    engine.pose_estimation_enabled = True
+
+    frame = np.full((720, 1280, 3), 90, dtype=np.uint8)
+    tracks = [
+        {
+            "track_id": 1,
+            "bbox": [200, 180, 310, 500],
+            "centroid": (255, 340),
+            "velocity": (4.0, 1.0),
+            "history": [(235, 335), (240, 336), (248, 338), (255, 340)],
+            "behavior_status": "NORMAL",
+        },
+        {
+            "track_id": 2,
+            "bbox": [600, 380, 820, 490],  # Wide horizontal aspect ratio -> FALL_DETECTED
+            "centroid": (710, 435),
+            "velocity": (0.0, 0.0),
+            "history": [(710, 435)],
+            "behavior_status": "LOITERING",
+        },
+    ]
+    rois = [{"name": "Test_ROI", "points": [[280, 100], [580, 100], [580, 600], [280, 600]]}]
+
+    # 1. Dynamic KVKK Masking (masks track 1 NORMAL, leaves track 2 LOITERING unmasked)
+    masked_count = engine.apply_dynamic_kvkk_masking(frame, tracks)
+    assert masked_count == 1
+
+    # 2. Heatmap & 3s Future Trajectory Prediction (Track 1 is moving right towards Test_ROI -> pre-breach)
+    warnings = engine.update_and_draw_heatmap_and_predictions(frame, tracks, rois)
+    assert "predicted_point" in tracks[0]
+    assert len(warnings) >= 1
+
+    # 3. Pose Skeleton & Action Anomaly (Track 2 horizontal bbox -> FALL_DETECTED)
+    pose_alerts = engine.analyze_and_draw_pose_actions(frame, tracks)
+    assert any("FALL_DETECTED" in pa["action"] for pa in pose_alerts)
+
+    # 4. Abandoned Object / Luggage Detection
+    engine.trigger_simulated_abandoned_bag()
+    bag_alerts = engine.update_and_draw_abandoned_objects(
+        frame, [], tracks, current_time=time.time()
+    )
+    assert len(bag_alerts) >= 1
+
+    # 5. Anti-Spoofing Liveness Verification
+    assets = ensure_demo_assets()
+    face_img = cv2.resize(cv2.imread(assets["suspect1_image"]), (112, 112))
+    liveness = engine.evaluate_face_liveness(face_img)
+    assert 0.15 <= liveness["liveness_score"] <= 0.99
+    assert "label" in liveness
+
+    # 6. Visual Clothing Attributes, AI Security Report & Natural Language Forensic Search
+    clothing = engine.extract_clothing_attributes(face_img)
+    report = engine.generate_gemini_vlm_security_report(
+        face_img,
+        {"camera_id": "CAM-01", "roi_name": "Main_Entrance_ROI", "dwell_time": 6.5, "efficiency": 0.18, "pose_action": "STANDING"},
+        liveness,
+        clothing,
+    )
+    assert "AI Analizi:" in report
+
+    sample_events = [
+        {"event_id": "EVT-1", "upper_clothing": "Siyah (Black)", "roi_name": "Main_Entrance_ROI", "behavior_summary": report},
+        {"event_id": "EVT-2", "upper_clothing": "Beyaz (White)", "roi_name": "Sensitive_Area_ROI", "behavior_summary": "Normal"},
+    ]
+    found = engine.search_events_by_query(sample_events, "siyah main_entrance")
+    assert len(found) == 1 and found[0]["event_id"] == "EVT-1"

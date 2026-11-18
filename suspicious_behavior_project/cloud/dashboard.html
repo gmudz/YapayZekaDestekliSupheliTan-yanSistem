@@ -234,6 +234,37 @@
               </div>
             </div>
 
+            <!-- 6 Smart AI Extensions Control Deck -->
+            <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/20 flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs font-label-xs text-primary uppercase flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                Akıllı AI Modülleri:
+              </span>
+              <div class="flex flex-wrap items-center gap-2">
+                <button id="btnKvkkBlur" onclick="toggleSmartFeature('kvkk_dynamic_blur')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-tertiary/15 text-tertiary border border-tertiary/40 cursor-pointer transition-all">
+                  🛡️ KVKK Yüz Maskeleme: AÇIK
+                </button>
+                <button id="btnPred" onclick="toggleSmartFeature('trajectory_prediction_enabled')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/40 cursor-pointer transition-all">
+                  🔮 3sn Yörünge Tahmini: AÇIK
+                </button>
+                <button id="btnPose" onclick="toggleSmartFeature('pose_estimation_enabled')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/40 cursor-pointer transition-all">
+                  🦴 İskelet &amp; Poz: AÇIK
+                </button>
+                <button id="btnHeatmap" onclick="toggleSmartFeature('heatmap_enabled')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant border border-outline-variant/30 cursor-pointer transition-all">
+                  🔥 Canlı Isı Haritası: KAPALI
+                </button>
+                <button id="btnBagTest" onclick="simulateAbandonedBag()" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/30 cursor-pointer transition-all">
+                  🎒 Terk Edilmiş Çanta Testi: KAPALI
+                </button>
+                <button id="btnVoiceTts" onclick="toggleVoiceTts()" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-tertiary/15 text-tertiary border border-tertiary/40 cursor-pointer transition-all">
+                  🔊 Sesli Alarm: AÇIK
+                </button>
+                <button onclick="sendTelegramAlert()" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 cursor-pointer transition-all">
+                  📲 Telegram'a Gönder
+                </button>
+              </div>
+            </div>
+
             <!-- 4 Live KPI Metric Badges -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-1 border border-outline-variant/20">
@@ -268,6 +299,11 @@
                   Temizle
                 </button>
               </div>
+            </div>
+
+            <!-- Natural Language Forensic Search Bar -->
+            <div class="relative">
+              <input type="text" id="forensicSearchInput" oninput="runForensicSearch(this.value)" placeholder="🔍 Adli Arama: kıyafet rengi (Siyah, Beyaz), bölge, isim, poz..." class="w-full bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-xs text-on-surface focus:border-primary focus:outline-none" />
             </div>
 
             <div id="alertList" class="flex flex-col gap-3 overflow-y-auto max-h-[560px] pr-1">
@@ -408,6 +444,17 @@
   </div>
 
   <script>
+    let smartState = {
+      kvkk_dynamic_blur: true,
+      trajectory_prediction_enabled: true,
+      pose_estimation_enabled: true,
+      heatmap_enabled: false,
+      simulated_abandoned_bag: false
+    };
+    let voiceTtsEnabled = true;
+    let lastSpokenEventId = null;
+    let activeSearchQuery = "";
+
     function showToast(msg) {
       const el = document.getElementById('toastStatus');
       el.textContent = msg;
@@ -415,11 +462,91 @@
       setTimeout(() => el.classList.add('hidden'), 3000);
     }
 
+    function speakAlert(text) {
+      if (!voiceTtsEnabled || !('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'tr-TR';
+        u.rate = 1.05;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+
+    function updateSmartButtonsUI(sf) {
+      if (!sf) return;
+      smartState = { ...smartState, ...sf };
+      const ACTIVE_STYLE_MAP = {
+        tertiary: "text-xs font-label-xs px-3 py-1.5 rounded-lg bg-tertiary/15 text-tertiary border border-tertiary/40 cursor-pointer transition-all",
+        primary: "text-xs font-label-xs px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/40 cursor-pointer transition-all",
+        error: "text-xs font-label-xs px-3 py-1.5 rounded-lg bg-error-container/40 text-error border border-error/50 cursor-pointer transition-all"
+      };
+      const INACTIVE_STYLE = "text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant border border-outline-variant/30 cursor-pointer transition-all";
+      const setBtn = (id, label, active, colorType) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = `${label}: ${active ? 'AÇIK' : 'KAPALI'}`;
+        el.className = active ? ACTIVE_STYLE_MAP[colorType] : INACTIVE_STYLE;
+      };
+      setBtn('btnKvkkBlur', '🛡️ KVKK Yüz Maskeleme', smartState.kvkk_dynamic_blur, 'tertiary');
+      setBtn('btnPred', '🔮 3sn Yörünge Tahmini', smartState.trajectory_prediction_enabled, 'primary');
+      setBtn('btnPose', '🦴 İskelet & Poz', smartState.pose_estimation_enabled, 'primary');
+      setBtn('btnHeatmap', '🔥 Canlı Isı Haritası', smartState.heatmap_enabled, 'tertiary');
+      setBtn('btnBagTest', '🎒 Terk Edilmiş Çanta Testi', !!smartState.simulated_abandoned_bag, 'error');
+    }
+
+    async function toggleSmartFeature(key) {
+      const nextVal = !smartState[key];
+      smartState[key] = nextVal;
+      updateSmartButtonsUI(smartState);
+      await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: nextVal })
+      });
+      showToast(`${key} -> ${nextVal ? 'AÇIK' : 'KAPALI'}`);
+    }
+
+    async function simulateAbandonedBag() {
+      const res = await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulate_abandoned_bag: true })
+      });
+      const data = await res.json();
+      if (data.smart_features) updateSmartButtonsUI(data.smart_features);
+      const isOn = !!(data.smart_features && data.smart_features.simulated_abandoned_bag);
+      showToast(isOn ? '🎒 Terk edilmiş sırt çantası senaryosu AKTİF!' : '🎒 Terk edilmiş çanta testi kapatıldı.');
+    }
+
+    function toggleVoiceTts() {
+      voiceTtsEnabled = !voiceTtsEnabled;
+      const el = document.getElementById('btnVoiceTts');
+      el.textContent = `🔊 Sesli Alarm: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`;
+      showToast(`Sesli Alarm: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`);
+    }
+
+    async function sendTelegramAlert() {
+      const res = await fetch('/api/v1/notify/telegram', { method: 'POST' });
+      const data = await res.json();
+      showToast(data.message || (data.sent ? '📲 Telegram bildirimi gönderildi!' : '📲 Telegram mesajı hazırlandı'));
+    }
+
+    async function runForensicSearch(q) {
+      activeSearchQuery = q.trim();
+      const res = await fetch(`/api/v1/events/search?q=${encodeURIComponent(activeSearchQuery)}`);
+      const data = await res.json();
+      renderEvents(data.events || []);
+    }
+
     async function refreshState() {
       try {
+        const eventsUrl = activeSearchQuery
+          ? `/api/v1/events/search?q=${encodeURIComponent(activeSearchQuery)}`
+          : '/api/v1/events';
         const [healthRes, eventsRes, wlRes] = await Promise.all([
           fetch('/api/v1/health'),
-          fetch('/api/v1/events'),
+          fetch(eventsUrl),
           fetch('/api/v1/watchlist')
         ]);
         const health = await healthRes.json();
@@ -435,7 +562,19 @@
         document.getElementById('statEdgeFrames').textContent = tel.frames_processed_on_edge || 0;
         document.getElementById('milvusStatusText').textContent = `${health.milvus.backend} (${health.milvus.watchlist_count} Kayıt)`;
 
-        renderEvents(eventsData.events || []);
+        if (health.smart_features) {
+          updateSmartButtonsUI(health.smart_features);
+        }
+
+        const evList = eventsData.events || [];
+        if (evList.length > 0 && evList[0].event_id !== lastSpokenEventId) {
+          lastSpokenEventId = evList[0].event_id;
+          if (evList[0].watchlist_hit && evList[0].best_match) {
+            speakAlert(`Dikkat! ${evList[0].roi_name} bölgesinde Milvus izleme listesi eşleşmesi tespit edildi: ${evList[0].best_match.name}`);
+          }
+        }
+
+        renderEvents(evList);
         renderWatchlist(wlData.identities || []);
       } catch (err) {
         console.error(err);
@@ -545,6 +684,11 @@
             </div>
             <div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
               <div class="${isHit ? 'bg-primary' : 'bg-outline'} h-full" style="width: ${simPct}%"></div>
+            </div>
+            <div class="flex flex-wrap gap-1.5 text-[10px] font-label-xs">
+              <span class="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded border border-tertiary/30">🛡️ ${ev.liveness_label || 'GERÇEK CANLI YÜZ'}</span>
+              <span class="bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/30">👕 Üst: ${ev.upper_clothing || 'Koyu'}</span>
+              <span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded">🦴 ${ev.pose_action || 'STANDING'}</span>
             </div>
             <div class="bg-surface-container-high px-2.5 py-1.5 rounded text-[11px] font-label-xs text-on-surface-variant flex items-center gap-1.5">
               <span class="material-symbols-outlined text-[15px] text-tertiary">psychology</span>

@@ -35,6 +35,7 @@ from modules.face_recognizer import FairFaceRecognizer
 from modules.vector_db import MilvusWatchlistDB
 from modules.privacy_bridge import KVKKPrivacyBridge
 from modules.fairness_evaluator import TubitakEvaluationSuite
+from modules.smart_analytics import SmartIntelligenceEngine
 
 
 class EdgeEventPayload(BaseModel):
@@ -47,6 +48,7 @@ class EdgeEventPayload(BaseModel):
     kvkk_data_minimized: bool = True
     raw_stream_transmitted: bool = False
     cropped_image_b64: str
+    pose_action: Optional[str] = "STANDING (BEKLEME)"
 
 
 class RuntimeControlUpdate(BaseModel):
@@ -55,6 +57,11 @@ class RuntimeControlUpdate(BaseModel):
     efficiency_threshold: Optional[float] = None
     force_trigger_alert: Optional[bool] = None
     clear_events: Optional[bool] = None
+    kvkk_dynamic_blur: Optional[bool] = None
+    heatmap_enabled: Optional[bool] = None
+    trajectory_prediction_enabled: Optional[bool] = None
+    pose_estimation_enabled: Optional[bool] = None
+    simulate_abandoned_bag: Optional[bool] = None
 
 
 class CloudPipelineEngine:
@@ -80,6 +87,7 @@ class CloudPipelineEngine:
             ),
         )
         self.evaluator = TubitakEvaluationSuite(self.config)
+        self.smart_engine = SmartIntelligenceEngine()
         self.events_log: List[Dict[str, Any]] = []
         self.latest_benchmark: Optional[Dict[str, Any]] = None
         self.edge_telemetry: Dict[str, Any] = {
@@ -167,19 +175,27 @@ class CloudPipelineEngine:
         dwell_val = round(float(payload.get("dwell_time", 0.0)), 1)
         eff_val = round(float(payload.get("efficiency", 0.0)), 3)
         roi_val = payload.get("roi_name", "Main_Entrance_ROI")
+        pose_val = payload.get("pose_action", "STANDING (BEKLEME)")
         is_hit = search_res["is_watchlist_hit"]
         bm = search_res["best_match"]
 
-        if is_hit and bm:
-            behavior_summary = (
-                f"Şüpheli bekleme ({dwell_val}sn, Verim:{eff_val}) • "
-                f"Milvus Eşleşmesi: {bm['name']} (%{bm['cosine_similarity']*100:.1f})"
-            )
-        else:
-            behavior_summary = (
-                f"{roi_val} bölgesinde düşük yörünge verimliliği ({eff_val}) • "
-                f"İzleme listesinde kayıt bulunamadı"
-            )
+        # 5. Anti-Spoofing / Liveness Check
+        liveness_info = self.smart_engine.evaluate_face_liveness(aligned_face)
+
+        # 6. Visual Clothing Attributes & Gemini 3.8 Flash VLM Security Report
+        clothing_info = self.smart_engine.extract_clothing_attributes(crop_bgr)
+        meta_for_vlm = {
+            "camera_id": payload.get("camera_id", "CAM-01-GIRIS"),
+            "roi_name": roi_val,
+            "dwell_time": dwell_val,
+            "efficiency": eff_val,
+            "pose_action": pose_val,
+            "watchlist_hit": is_hit,
+            "best_match": bm,
+        }
+        behavior_summary = self.smart_engine.generate_gemini_vlm_security_report(
+            crop_bgr, meta_for_vlm, liveness_info, clothing_info
+        )
 
         event_record = {
             "event_id": f"EVT-{int(time.time() * 1000) % 1000000:06d}",
@@ -193,6 +209,12 @@ class CloudPipelineEngine:
             "face_confidence": round(face_conf, 2),
             "demographic_group": demographic_group,
             "embedding_dim": 512,
+            "liveness_score": liveness_info["liveness_score"],
+            "liveness_is_live": liveness_info["is_live"],
+            "liveness_label": liveness_info["label"],
+            "upper_clothing": clothing_info["upper_color"],
+            "lower_clothing": clothing_info["lower_color"],
+            "pose_action": pose_val,
             "watchlist_hit": is_hit,
             "best_match": bm,
             "top_candidates": search_res["top_candidates"],
@@ -227,6 +249,7 @@ cloud_engine = CloudPipelineEngine()
 
 @app.get("/api/v1/health")
 def get_health():
+    se = cloud_engine.smart_engine
     return {
         "status": "ok",
         "project": cloud_engine.config.get("project", {}),
@@ -234,12 +257,22 @@ def get_health():
         "edge_telemetry": cloud_engine.edge_telemetry,
         "events_count": len(cloud_engine.events_log),
         "kvkk_privacy_by_design": True,
+        "smart_features": {
+            "kvkk_dynamic_blur": se.kvkk_dynamic_blur,
+            "heatmap_enabled": se.heatmap_enabled,
+            "trajectory_prediction_enabled": se.trajectory_prediction_enabled,
+            "pose_estimation_enabled": se.pose_estimation_enabled,
+            "abandoned_object_enabled": se.abandoned_object_enabled,
+            "anti_spoofing_enabled": se.anti_spoofing_enabled,
+            "simulated_abandoned_bag": bool(se.simulated_bag and se.simulated_bag.get("active")),
+        },
     }
 
 
 @app.post("/api/v1/controls")
 def update_runtime_controls(update: RuntimeControlUpdate):
-    """Allow interactive users in the Web Dashboard to change source, thresholds, or trigger test alerts."""
+    """Allow interactive users in the Web Dashboard to change source, thresholds, or smart AI features."""
+    se = cloud_engine.smart_engine
     if update.source is not None:
         cloud_engine.runtime_controls["requested_source"] = update.source
     if update.time_threshold is not None:
@@ -253,11 +286,48 @@ def update_runtime_controls(update: RuntimeControlUpdate):
     if update.clear_events:
         with cloud_engine._lock:
             cloud_engine.events_log.clear()
+        se.simulated_bag = None
+    if update.kvkk_dynamic_blur is not None:
+        se.kvkk_dynamic_blur = bool(update.kvkk_dynamic_blur)
+    if update.heatmap_enabled is not None:
+        se.heatmap_enabled = bool(update.heatmap_enabled)
+    if update.trajectory_prediction_enabled is not None:
+        se.trajectory_prediction_enabled = bool(update.trajectory_prediction_enabled)
+    if update.pose_estimation_enabled is not None:
+        se.pose_estimation_enabled = bool(update.pose_estimation_enabled)
+    if update.simulate_abandoned_bag:
+        se.toggle_simulated_abandoned_bag()
     return {
         "status": "updated",
         "controls": cloud_engine.runtime_controls,
+        "smart_features": {
+            "kvkk_dynamic_blur": se.kvkk_dynamic_blur,
+            "heatmap_enabled": se.heatmap_enabled,
+            "trajectory_prediction_enabled": se.trajectory_prediction_enabled,
+            "pose_estimation_enabled": se.pose_estimation_enabled,
+            "simulated_abandoned_bag": bool(se.simulated_bag and se.simulated_bag.get("active")),
+        },
         "telemetry": cloud_engine.edge_telemetry,
     }
+
+
+@app.get("/api/v1/events/search")
+def search_events(q: str = ""):
+    """Natural language forensic search across security events."""
+    filtered = cloud_engine.smart_engine.search_events_by_query(
+        cloud_engine.events_log, q
+    )
+    return {"query": q, "count": len(filtered), "events": filtered}
+
+
+@app.post("/api/v1/notify/telegram")
+def notify_telegram():
+    """Send the most recent security alert to Telegram Bot."""
+    if not cloud_engine.events_log:
+        return {"sent": False, "message": "Henüz gönderilecek bir uyarı kaydı yok."}
+    return cloud_engine.smart_engine.send_telegram_notification(
+        cloud_engine.events_log[0]
+    )
 
 
 @app.post("/api/v1/test/image")

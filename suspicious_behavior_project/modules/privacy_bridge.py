@@ -84,6 +84,7 @@ class KVKKPrivacyBridge:
             "kvkk_data_minimized": True,
             "raw_stream_transmitted": False,
             "cropped_image_b64": crop_b64,
+            "pose_action": str(alert.get("pose_action", "STANDING (BEKLEME)")),
         }
 
         self.transmitted_events_count += 1

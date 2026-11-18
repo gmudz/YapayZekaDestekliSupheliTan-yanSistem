@@ -27,7 +27,7 @@ if [ ! -x "./venv/bin/python" ]; then
 fi
 
 # 2. Install dependencies if not yet installed
-if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5; assert hasattr(cv2, 'VideoCapture')" >/dev/null 2>&1; then
+if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5; from google import genai; assert hasattr(cv2, 'VideoCapture')" >/dev/null 2>&1; then
     echo "[3/4] Gerekli yapay zeka ve bulut kütüphaneleri yükleniyor..."
     if command -v nvidia-smi >/dev/null 2>&1; then
         uv pip install --python ./venv/bin/python -r requirements.txt

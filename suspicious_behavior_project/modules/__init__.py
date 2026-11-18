@@ -7,6 +7,7 @@ from modules.face_recognizer import FairFaceRecognizer, ArcFaceMarginProduct
 from modules.vector_db import MilvusWatchlistDB
 from modules.privacy_bridge import KVKKPrivacyBridge
 from modules.fairness_evaluator import TubitakEvaluationSuite
+from modules.smart_analytics import SmartIntelligenceEngine
 
 __all__ = [
     "PersonDetector",
@@ -18,4 +19,5 @@ __all__ = [
     "MilvusWatchlistDB",
     "KVKKPrivacyBridge",
     "TubitakEvaluationSuite",
+    "SmartIntelligenceEngine",
 ]
