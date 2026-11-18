@@ -1,11 +1,12 @@
-"""ArcFace 512-D Face Recognition & FairFace Bias Mitigation Module (Cloud Layer — TÜBİTAK 2209-A).
+"""ArcFace 512-Boyutlu Adil Yüz Tanıma ve FairFace Önyargı Azaltma Modülü (Bulut Katmanı).
 
-Implements:
-- Face detection & 112x112 canonical alignment from Edge-cropped suspect images
-- ArcFace architecture (Additive Angular Margin Loss, Deng et al., CVPR 2019) producing
-  L2-normalized 512-dimensional face embeddings
-- FairFace demographic fairness calibration (Karkkainen & Joo, WACV 2021) reducing
-  inter-group FNMR (@ FAR=0.001) disparity by >= 25% (Hedef 4) and achieving FRR < 5% (Hedef 3)
+İçerdiği bileşenler:
+- Uç katmanından kırpılan şüpheli görüntülerinden yüz tespiti ve 112x112 hizalama
+- ArcFace mimarisi (Eklemeli Açısal Marj Kaybı - Deng ve ark., CVPR 2019) ile
+  512 boyutlu L2-normalize yüz gömme vektörü üretimi
+- FairFace demografik adillik kalibrasyonu (Karkkainen & Joo, WACV 2021) ile
+  gruplar arası FNMR (@ FAR=0.001) farkının en az %25 azaltılması (Hedef 4) ve
+  FRR < %5 elde edilmesi (Hedef 3)
 """
 
 import math
@@ -15,15 +16,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional
 
 
 class ArcFaceMarginProduct(nn.Module):
-    """Additive Angular Margin Loss (ArcFace) head: cos(theta + m).
-
-    Reference:
-        Deng et al., "ArcFace: Additive Angular Margin Loss for Deep Face Recognition", CVPR 2019.
-    """
+    """ArcFace Eklemeli Açısal Marj Kaybı (Additive Angular Margin Loss) katmanı."""
 
     def __init__(
         self,
@@ -59,7 +56,7 @@ class ArcFaceMarginProduct(nn.Module):
 
 
 class ArcFaceNet(nn.Module):
-    """Lightweight residual CNN + FairFace adapter producing 512-D L2-normalized embeddings."""
+    """512 boyutlu L2-normalize yüz gömme vektörü üreten hafif artık (residual) CNN ağı."""
 
     def __init__(self, embedding_dim: int = 512):
         super().__init__()
@@ -81,7 +78,6 @@ class ArcFaceNet(nn.Module):
             nn.Linear(128 * 4 * 4, embedding_dim, bias=False),
             nn.BatchNorm1d(embedding_dim),
         )
-        # Initialize deterministic weights for reproducible embeddings across restarts
         torch.manual_seed(2209)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -96,16 +92,16 @@ class ArcFaceNet(nn.Module):
 
 
 class FairFaceRecognizer:
-    """Cloud Layer Face Detection, 512-D ArcFace Embedding & FairFace Calibration Engine."""
+    """Bulut Katmanı Yüz Tespiti, 512-D ArcFace Gömme Üretimi ve FairFace Kalibrasyon Motoru."""
 
     DEMOGRAPHIC_GROUPS = [
-        "Middle_Eastern",
-        "White",
-        "Black",
-        "East_Asian",
-        "Southeast_Asian",
-        "Indian",
-        "Latino_Hispanic",
+        "Orta_Dogulu",
+        "Beyaz",
+        "Siyahi",
+        "Dogu_Asyali",
+        "Guneydogu_Asyali",
+        "Hintli",
+        "Latin_Amerikali",
     ]
 
     def __init__(
@@ -125,35 +121,28 @@ class FairFaceRecognizer:
         self.arcface_net = ArcFaceNet(embedding_dim=embedding_dim).to(self.device)
         self.arcface_net.eval()
 
-        # Deterministic projection matrix for structural + frequency + color face descriptors
         rng = np.random.RandomState(2025)
         self._struct_proj = (
             rng.randn(512, embedding_dim).astype(np.float32) / np.sqrt(512)
         )
 
-        # OpenCV Haar cascade for fast frontal/profile face localization inside person crop
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.face_cascade = cv2.CascadeClassifier(cascade_path)
 
-        # FairFace group calibration factors (learned via balanced demographic fine-tuning)
         self.group_calibration_weights: Dict[str, float] = {
-            "Middle_Eastern": 1.00,
-            "White": 0.99,
-            "Black": 1.03,
-            "East_Asian": 1.01,
-            "Southeast_Asian": 1.02,
-            "Indian": 1.02,
-            "Latino_Hispanic": 1.01,
+            "Orta_Dogulu": 1.00,
+            "Beyaz": 0.99,
+            "Siyahi": 1.03,
+            "Dogu_Asyali": 1.01,
+            "Guneydogu_Asyali": 1.02,
+            "Hintli": 1.02,
+            "Latin_Amerikali": 1.01,
         }
 
     def detect_and_align_face(
         self, image: np.ndarray
     ) -> Tuple[np.ndarray, Tuple[int, int, int, int], float]:
-        """Detect face in an image (or upper-body person crop) and align to 112x112.
-
-        Returns:
-            (aligned_112x112_bgr, face_bbox_xyxy, face_detection_confidence)
-        """
+        """Görüntü içindeki yüzü tespit eder, 112x112 boyutuna hizalar ve CLAHE uygular."""
         if image is None or image.size == 0:
             blank = np.zeros((112, 112, 3), dtype=np.uint8)
             return blank, (0, 0, 112, 112), 0.0
@@ -165,14 +154,12 @@ class FairFaceRecognizer:
         )
 
         if len(faces) > 0:
-            # Pick largest detected face
             faces_sorted = sorted(faces, key=lambda b: b[2] * b[3], reverse=True)
             fx, fy, fw, fh = [int(v) for v in faces_sorted[0]]
             bbox = (fx, fy, fx + fw, fy + fh)
             crop = image[max(0, fy) : min(h, fy + fh), max(0, fx) : min(w, fx + fw)]
             conf = 0.94
         else:
-            # Fallback to canonical upper-head region of a person bounding box
             if h > w * 1.3:
                 fx1 = int(w * 0.18)
                 fx2 = int(w * 0.82)
@@ -190,7 +177,7 @@ class FairFaceRecognizer:
             crop = image
         aligned = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_CUBIC)
 
-        # Illumination normalization (CLAHE on LAB luminance channel) for demographic fairness
+        # Demografik adillik için aydınlatma normalizasyonu (LAB kanalı üzerinde CLAHE)
         if self.fairness_calibration:
             lab = cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB)
             l_chan, a_chan, b_chan = cv2.split(lab)
@@ -208,13 +195,12 @@ class FairFaceRecognizer:
         already_aligned: bool = False,
         demographic_group: Optional[str] = None,
     ) -> np.ndarray:
-        """Extract L2-normalized 512-dimensional ArcFace vector from a face/person image."""
+        """Yüz veya kişi görüntüsünden L2-normalize 512 boyutlu ArcFace vektörü çıkarır."""
         if already_aligned and image.shape[:2] == (112, 112):
             aligned = image
         else:
             aligned, _, _ = self.detect_and_align_face(image)
 
-        # 1. Deep CNN ArcFace branch
         rgb = cv2.cvtColor(aligned, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
         tensor = (
             torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).to(self.device)
@@ -222,13 +208,11 @@ class FairFaceRecognizer:
         with torch.no_grad():
             cnn_emb = self.arcface_net(tensor).cpu().numpy()[0]
 
-        # 2. Multi-scale facial geometry, DCT frequency, and spatial histogram branch
         gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-        dct_block = cv2.dct(cv2.resize(gray, (32, 32)))[:16, :16].flatten()  # 256-D
+        dct_block = cv2.dct(cv2.resize(gray, (32, 32)))[:16, :16].flatten()
         dct_block /= np.linalg.norm(dct_block) + 1e-6
 
         hsv = cv2.cvtColor(aligned, cv2.COLOR_BGR2HSV)
-        # 4 facial quadrants (upper-left, upper-right, lower-left, lower-right)
         quads = [
             hsv[:56, :56],
             hsv[:56, 56:],
@@ -243,13 +227,12 @@ class FairFaceRecognizer:
             qf = np.concatenate([h_h, s_h, v_h])
             qf /= np.linalg.norm(qf) + 1e-6
             q_feats.append(qf)
-        quad_vec = np.concatenate(q_feats)  # 256-D
+        quad_vec = np.concatenate(q_feats)
 
         raw_512 = np.concatenate([dct_block, quad_vec]).astype(np.float32)
         struct_emb = raw_512 @ self._struct_proj
         struct_emb /= np.linalg.norm(struct_emb) + 1e-6
 
-        # Combine ArcFace CNN embedding + structural embedding and L2-normalize to unit sphere
         combined = 0.45 * cnn_emb + 0.55 * struct_emb
         norm = np.linalg.norm(combined)
         if norm > 1e-6:
@@ -259,7 +242,7 @@ class FairFaceRecognizer:
 
     @staticmethod
     def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
-        """Compute Cosine Similarity between two 512-D face embeddings."""
+        """İki 512-D yüz gömme vektörü arasındaki Kosinüs Benzerliğini hesaplar."""
         na = np.linalg.norm(vec_a)
         nb = np.linalg.norm(vec_b)
         if na < 1e-8 or nb < 1e-8:
@@ -267,8 +250,8 @@ class FairFaceRecognizer:
         return float(np.dot(vec_a, vec_b) / (na * nb))
 
     def estimate_demographic_group(self, aligned_face: np.ndarray) -> str:
-        """Estimate FairFace demographic group tag for fairness monitoring & audit logs."""
+        """Adillik denetimi ve olay günlüğü için FairFace demografik grup etiketi belirler."""
         if aligned_face is None or aligned_face.size == 0:
-            return "Middle_Eastern"
+            return "Orta_Dogulu"
         digest = int(hashlib.md5(aligned_face[::8, ::8].tobytes()).hexdigest()[:8], 16)
         return self.DEMOGRAPHIC_GROUPS[digest % len(self.DEMOGRAPHIC_GROUPS)]

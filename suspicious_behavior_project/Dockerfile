@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for OpenCV & PyTorch
+# OpenCV ve PyTorch için sistem bağımlılıklarını kur
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -13,20 +13,20 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Python bağımlılıklarını yükle
 COPY requirements.txt .
 RUN pip install --no-cache-dir "setuptools<80" && \
     pip install --no-cache-dir -r requirements.txt && \
     pip uninstall -y opencv-python-headless || true && \
     pip install --no-cache-dir "opencv-python>=4.8.0,<5.0.0"
 
-# Copy application code
+# Uygulama kodlarını kopyala
 COPY . .
 
-# Expose Cloud Layer FastAPI & Web Dashboard port
+# Bulut Katmanı FastAPI ve Web Paneli portunu aç
 EXPOSE 8000
 
 ENV PYTHONPATH=/app
 
-# Launch Hybrid Edge/Cloud System
+# Hibrit Uç/Bulut Sistemini Başlat
 CMD ["python", "main.py", "--headless"]

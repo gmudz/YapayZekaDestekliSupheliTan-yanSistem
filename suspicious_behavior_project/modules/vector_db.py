@@ -1,9 +1,8 @@
-"""Milvus Vector Database Watchlist Manager (Cloud Layer — TÜBİTAK 2209-A).
+"""Milvus Vektör Veritabanı İzleme Listesi Yöneticisi (Bulut Katmanı — TÜBİTAK 2209-A).
 
-Connects to Milvus Standalone (port 19530) to store and search 512-dimensional
-ArcFace embeddings using Cosine Similarity (metric_type='COSINE').
-Also maintains a synchronized local JSON mirror so the system operates with
-100% availability and zero data loss during container restarts.
+Milvus Standalone sunucusuna (19530 portu; yerel yoksa WireGuard merkez 10.66.66.1:19530)
+bağlanarak 512 boyutlu ArcFace gömme vektörlerini Kosinüs Benzerliği (COSINE) metriği ile
+saklar ve arar. Aynı zamanda kesintisiz çalışma için yerel JSON yansısını senkronize tutar.
 """
 
 import os
@@ -15,7 +14,7 @@ from typing import Dict, List, Optional, Any
 
 
 class MilvusWatchlistDB:
-    """Milvus Vector Database client for 512-D ArcFace Watchlist Search."""
+    """512-D ArcFace İzleme Listesi araması için Milvus Vektör Veritabanı istemcisi."""
 
     def __init__(
         self,
@@ -51,17 +50,17 @@ class MilvusWatchlistDB:
                     if isinstance(data, dict):
                         self.records = data
             except Exception as e:
-                print(f"[MilvusWatchlistDB] Warning loading local mirror: {e}")
+                print(f"[MilvusVeritabani] Yerel yedek yükleme uyarısı: {e}")
 
     def _save_local_store(self) -> None:
         try:
             with open(self.local_fallback_path, "w", encoding="utf-8") as f:
                 json.dump(self.records, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[MilvusWatchlistDB] Warning saving local mirror: {e}")
+            print(f"[MilvusVeritabani] Yerel yedek kaydetme uyarısı: {e}")
 
     def connect_milvus(self) -> bool:
-        """Connect to Milvus Standalone on host:port and initialize 512-D COSINE collection."""
+        """Milvus Standalone sunucusuna bağlanır ve 512-D COSINE koleksiyonunu hazırlar."""
         try:
             from pymilvus import (
                 connections,
@@ -80,7 +79,6 @@ class MilvusWatchlistDB:
                     timeout=2.0,
                 )
             except Exception:
-                # Try central WireGuard Cloud server (10.66.66.1:19530) if local Milvus is not running
                 connections.connect(
                     alias="default",
                     host="10.66.66.1",
@@ -120,7 +118,7 @@ class MilvusWatchlistDB:
                 ]
                 schema = CollectionSchema(
                     fields=fields,
-                    description="TÜBİTAK 2209-A ArcFace 512-D Watchlist Collection",
+                    description="TÜBİTAK 2209-A ArcFace 512-D İzleme Listesi Koleksiyonu",
                 )
                 self.collection = Collection(
                     name=self.collection_name, schema=schema
@@ -139,12 +137,11 @@ class MilvusWatchlistDB:
             self.collection.load()
             self.milvus_connected = True
 
-            # Sync any local records into Milvus if collection is empty
             if self.collection.num_entities == 0 and len(self.records) > 0:
                 self._sync_all_to_milvus()
 
             return True
-        except Exception as e:
+        except Exception:
             self.milvus_connected = False
             self.collection = None
             return False
@@ -156,34 +153,35 @@ class MilvusWatchlistDB:
             pids, names, risks, groups, embs = [], [], [], [], []
             for pid, rec in self.records.items():
                 pids.append(str(pid))
-                names.append(str(rec.get("name", "Unknown")))
-                risks.append(str(rec.get("risk_level", "HIGH")))
-                groups.append(str(rec.get("demographic_group", "Middle_Eastern")))
+                names.append(str(rec.get("name", "Bilinmiyor")))
+                risks.append(str(rec.get("risk_level", "YÜKSEK")))
+                groups.append(str(rec.get("demographic_group", "Orta_Dogulu")))
                 vec = np.array(rec["embedding"], dtype=np.float32)
                 vec /= np.linalg.norm(vec) + 1e-8
                 embs.append(vec.tolist())
             if pids:
                 self.collection.insert([pids, names, risks, groups, embs])
                 self.collection.flush()
+                self.collection.load()
         except Exception as e:
-            print(f"[MilvusWatchlistDB] Sync warning: {e}")
+            print(f"[MilvusVeritabani] Senkronizasyon uyarısı: {e}")
 
     def enroll_identity(
         self,
         name: str,
         embedding: np.ndarray,
-        risk_level: str = "HIGH",
-        demographic_group: str = "Middle_Eastern",
+        risk_level: str = "YÜKSEK",
+        demographic_group: str = "Orta_Dogulu",
         person_id: Optional[str] = None,
         image_b64: Optional[str] = None,
         notes: str = "",
     ) -> Dict[str, Any]:
-        """Enroll a 512-D ArcFace vector into Milvus and the local watchlist mirror."""
+        """512 boyutlu ArcFace vektörünü Milvus ve yerel izleme listesi deposuna kaydeder."""
         pid = person_id or f"WL-{uuid.uuid4().hex[:8].upper()}"
         vec = np.asarray(embedding, dtype=np.float32).flatten()
         if len(vec) != self.embedding_dim:
             raise ValueError(
-                f"Expected {self.embedding_dim}-D vector, got {len(vec)}"
+                f"{self.embedding_dim} boyutlu vektör bekleniyordu, gelen boyut: {len(vec)}"
             )
         norm = np.linalg.norm(vec)
         if norm > 1e-8:
@@ -220,14 +218,14 @@ class MilvusWatchlistDB:
                 self.collection.flush()
                 self.collection.load()
             except Exception as e:
-                print(f"[MilvusWatchlistDB] Milvus insert warning: {e}")
+                print(f"[MilvusVeritabani] Milvus ekleme uyarısı: {e}")
 
         return {
             "person_id": pid,
             "name": name,
             "risk_level": risk_level,
             "demographic_group": demographic_group,
-            "backend": "milvus-standalone" if self.milvus_connected else "milvus-local-engine",
+            "backend": "Milvus Standalone (Canlı)" if self.milvus_connected else "Yerel Kosinüs Motoru",
         }
 
     def search_watchlist(
@@ -236,7 +234,7 @@ class MilvusWatchlistDB:
         top_k: int = 3,
         threshold: float = 0.52,
     ) -> Dict[str, Any]:
-        """Search Watchlist in Milvus using Cosine Similarity (metric_type='COSINE')."""
+        """Kosinüs Benzerliği (COSINE) kullanarak Milvus İzleme Listesinde arama yapar."""
         q_vec = np.asarray(query_embedding, dtype=np.float32).flatten()
         norm = np.linalg.norm(q_vec)
         if norm > 1e-8:
@@ -244,7 +242,7 @@ class MilvusWatchlistDB:
 
         start_t = time.perf_counter()
         matches: List[Dict[str, Any]] = []
-        used_backend = "milvus-local-cosine"
+        used_backend = "Yerel Kosinüs Vektör Motoru"
 
         if not self.milvus_connected:
             self.connect_milvus()
@@ -259,7 +257,7 @@ class MilvusWatchlistDB:
                     limit=top_k,
                     output_fields=["person_id", "name", "risk_level", "demographic_group"],
                 )
-                used_backend = "milvus-standalone"
+                used_backend = "Milvus Standalone v2.4"
                 if res and len(res[0]) > 0:
                     for hit in res[0]:
                         sim = float(hit.score)
@@ -268,10 +266,10 @@ class MilvusWatchlistDB:
                         matches.append(
                             {
                                 "person_id": pid,
-                                "name": hit.entity.get("name") or local_rec.get("name", "Unknown"),
-                                "risk_level": hit.entity.get("risk_level") or local_rec.get("risk_level", "HIGH"),
+                                "name": hit.entity.get("name") or local_rec.get("name", "Bilinmiyor"),
+                                "risk_level": hit.entity.get("risk_level") or local_rec.get("risk_level", "YÜKSEK"),
                                 "demographic_group": hit.entity.get("demographic_group")
-                                or local_rec.get("demographic_group", "Middle_Eastern"),
+                                or local_rec.get("demographic_group", "Orta_Dogulu"),
                                 "cosine_similarity": round(sim, 4),
                                 "is_match": sim >= threshold,
                                 "image_b64": local_rec.get("image_b64"),
@@ -280,7 +278,6 @@ class MilvusWatchlistDB:
             except Exception:
                 matches = []
 
-        # Fallback or verification against local records if Milvus collection was not yet populated
         if not matches and len(self.records) > 0:
             scored = []
             for pid, rec in self.records.items():
@@ -292,9 +289,9 @@ class MilvusWatchlistDB:
                 scored.append(
                     {
                         "person_id": pid,
-                        "name": rec.get("name", "Unknown"),
-                        "risk_level": rec.get("risk_level", "HIGH"),
-                        "demographic_group": rec.get("demographic_group", "Middle_Eastern"),
+                        "name": rec.get("name", "Bilinmiyor"),
+                        "risk_level": rec.get("risk_level", "YÜKSEK"),
+                        "demographic_group": rec.get("demographic_group", "Orta_Dogulu"),
                         "cosine_similarity": round(sim, 4),
                         "is_match": sim >= threshold,
                         "image_b64": rec.get("image_b64"),
@@ -318,7 +315,7 @@ class MilvusWatchlistDB:
         }
 
     def list_identities(self) -> List[Dict[str, Any]]:
-        """List all enrolled watchlist persons (excluding raw 512-float array for compact response)."""
+        """İzleme listesinde kayıtlı tüm profilleri döndürür."""
         out = []
         for pid, rec in self.records.items():
             out.append(
@@ -360,5 +357,5 @@ class MilvusWatchlistDB:
             "watchlist_count": len(self.records),
             "backend": "Milvus Standalone v2.4 (COSINE)"
             if self.milvus_connected
-            else "Local Cosine Vector Engine (Milvus Mirror)",
+            else "Yerel Kosinüs Vektör Motoru (Milvus Yedeği)",
         }

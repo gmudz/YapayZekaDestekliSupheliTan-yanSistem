@@ -13,7 +13,7 @@ echo "==========================================================================
 echo " 🛡️ TÜBİTAK 2209-A Hibrit Şüpheli Davranış ve Adil Yüz Tanıma Sistemi"
 echo "=============================================================================="
 
-# 1. Ensure uv is available
+# 1. Hızlı paket yöneticisini (uv) kontrol et veya kur
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v uv >/dev/null 2>&1; then
     echo "[1/4] Hızlı Python paket yöneticisi (uv) kuruluyor..."
@@ -26,7 +26,7 @@ if [ ! -x "./venv/bin/python" ]; then
     uv venv venv --python 3.11 --seed
 fi
 
-# 2. Install dependencies if not yet installed
+# 2. Bağımlılıkları kontrol et ve eksikse kur
 if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5; from google import genai; assert hasattr(cv2, 'VideoCapture')" >/dev/null 2>&1; then
     echo "[3/4] Gerekli yapay zeka ve bulut kütüphaneleri yükleniyor..."
     if command -v nvidia-smi >/dev/null 2>&1; then
@@ -44,10 +44,10 @@ else
     echo "[3/4] Bağımlılıklar hazır ✅"
 fi
 
-# 3. Start Milvus Standalone container if Docker is running and milvus image is cached
+# 3. Docker mevcutsa Milvus Standalone konteynerini başlat
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     if docker images -q milvusdb/milvus:v2.4.15 2>/dev/null | grep -q .; then
-        echo "[Opsiyonel] Milvus Standalone konteyneri başlatılıyor..."
+        echo "[İsteğe Bağlı] Milvus Standalone konteyneri başlatılıyor..."
         docker compose up -d 2>/dev/null || true
     fi
 fi

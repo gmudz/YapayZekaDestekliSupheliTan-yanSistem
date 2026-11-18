@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <meta content="web_dashboard" name="shell-type" />
-  <title>TÜBİTAK 2209-A | AI Surveillance &amp; Fair Face Recognition Dashboard</title>
+  <title>TÜBİTAK 2209-A | Akıllı Şüpheli Davranış, Risk Skorlama, Alarm ve Adil Yüz Tanıma Sistemi</title>
   <style>
     @layer base {
       html, body { margin: 0; padding: 0; scroll-behavior: smooth; }
@@ -13,6 +12,11 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0f131c; }
     ::-webkit-scrollbar-thumb { background: #262a33; border-radius: 9999px; }
+    @keyframes sirenPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); border-color: rgba(239, 68, 68, 0.9); }
+      50% { box-shadow: 0 0 24px 2px rgba(239, 68, 68, 0.35); border-color: rgba(255, 180, 171, 0.95); }
+    }
+    .siren-active { animation: sirenPulse 1.1s infinite; }
   </style>
   <script src="https://cdn.tailwindcss.com"></script>
   <script id="tailwind-config">
@@ -24,20 +28,16 @@
             tertiary: "#4edea3",
             "on-tertiary": "#003824",
             "surface-container-high": "#262a33",
-            "on-secondary-fixed-variant": "#5516be",
             "outline-variant": "#3d494c",
             "on-error": "#690005",
             "surface-bright": "#353942",
             "on-primary-fixed": "#001f26",
-            "on-primary-fixed-variant": "#004e5c",
             "surface-variant": "#31353e",
             "on-primary": "#003640",
             "on-background": "#dfe2ee",
             "primary-fixed-dim": "#4cd7f6",
             "surface-container-lowest": "#0a0e16",
             error: "#ffb4ab",
-            "tertiary-fixed-dim": "#4edea3",
-            "on-error-container": "#ffdad6",
             "on-surface": "#dfe2ee",
             outline: "#869397",
             surface: "#0f131c",
@@ -45,59 +45,21 @@
             "surface-container-highest": "#31353e",
             "surface-container-low": "#181c24",
             secondary: "#d0bcff",
-            "on-secondary-fixed": "#23005c",
-            "tertiary-fixed": "#6ffbbe",
             primary: "#4cd7f6",
             "secondary-container": "#571bc1",
-            "surface-tint": "#4cd7f6",
-            "surface-dim": "#0f131c",
             "on-primary-container": "#00424f",
-            "on-tertiary-fixed-variant": "#005236",
-            "on-secondary-container": "#c4abff",
-            "secondary-fixed": "#e9ddff",
             "on-surface-variant": "#bcc9cd",
             "primary-container": "#06b6d4",
-            "inverse-primary": "#00687a",
-            "on-tertiary-fixed": "#002113",
-            "inverse-on-surface": "#2c3039",
             "error-container": "#93000a",
             "primary-fixed": "#acedff",
-            "on-tertiary-container": "#00452e",
             background: "#0f131c",
-            "surface-container": "#1c2028",
-            "on-secondary": "#3c0091",
-            "secondary-fixed-dim": "#d0bcff",
-            "inverse-surface": "#dfe2ee"
-          },
-          borderRadius: {
-            DEFAULT: "0.25rem",
-            lg: "0.5rem",
-            xl: "0.75rem",
-            full: "9999px"
-          },
-          spacing: {
-            "space-xs": "0.25rem",
-            margin: "1rem",
-            "gutter-desktop": "1.5rem",
-            "space-lg": "1.5rem",
-            gutter: "1rem",
-            "margin-desktop": "2rem",
-            "space-md": "1rem",
-            "space-sm": "0.5rem",
-            "space-xl": "2rem"
+            "surface-container": "#1c2028"
           },
           fontFamily: {
-            "body-lg": ["Inter", "sans-serif"],
-            "label-xs": ["JetBrains Mono", "monospace"],
-            "headline-xl": ["Space Grotesk", "sans-serif"],
-            "body-sm": ["Inter", "sans-serif"],
-            "label-sm": ["JetBrains Mono", "monospace"],
-            "headline-md": ["Space Grotesk", "sans-serif"],
-            "headline-lg": ["Space Grotesk", "sans-serif"],
-            "body-md": ["Inter", "sans-serif"],
-            "label-md": ["JetBrains Mono", "monospace"],
             body: ["Inter", "sans-serif"],
-            headline: ["Space Grotesk", "sans-serif"]
+            headline: ["Space Grotesk", "sans-serif"],
+            "label-xs": ["JetBrains Mono", "monospace"],
+            "label-sm": ["JetBrains Mono", "monospace"]
           }
         }
       }
@@ -107,31 +69,35 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
 </head>
 <body class="bg-surface font-body text-on-surface">
-  <!-- Stitch Sidebar Navigation -->
-  <aside class="fixed left-0 top-0 h-full w-64 bg-surface-container-low z-50 hidden xl:flex flex-col pt-space-xl pb-space-xl border-r border-outline-variant/20">
-    <div class="px-space-lg mb-space-xl flex items-center gap-space-sm">
+  <!-- Yan Gezinme Çubuğu -->
+  <aside class="fixed left-0 top-0 h-full w-64 bg-surface-container-low z-50 hidden xl:flex flex-col pt-8 pb-8 border-r border-outline-variant/20">
+    <div class="px-6 mb-8 flex items-center gap-2.5">
       <div class="w-3 h-3 rounded-full bg-primary animate-pulse shadow-[0_0_12px_rgba(6,182,212,0.6)]"></div>
       <div>
         <span class="text-lg font-headline font-bold text-primary tracking-wider block">TÜBİTAK 2209-A</span>
         <span class="text-[11px] text-on-surface-variant block">Murad Ashkar • Bartın Üni.</span>
       </div>
     </div>
-    <nav class="flex-1 px-space-md space-y-2">
-      <a class="flex items-center px-space-md py-2.5 transition-all bg-primary-container text-on-primary-container font-semibold rounded-xl" href="#sec-live">
-        <span class="material-symbols-outlined mr-space-sm text-[20px]">videocam</span>
-        Canlı İzleme (Live)
+    <nav class="flex-1 px-4 space-y-2">
+      <a class="flex items-center px-4 py-2.5 transition-all bg-primary-container text-on-primary-container font-semibold rounded-xl" href="#sec-live">
+        <span class="material-symbols-outlined mr-2 text-[20px]">videocam</span>
+        Canlı İzleme
       </a>
-      <a class="flex items-center px-space-md py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#sec-watchlist">
-        <span class="material-symbols-outlined mr-space-sm text-[20px]">face</span>
+      <a class="flex items-center px-4 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#sec-risk-alarms">
+        <span class="material-symbols-outlined mr-2 text-[20px]">shield_with_heart</span>
+        Risk &amp; Alarm Merkezi
+      </a>
+      <a class="flex items-center px-4 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#sec-watchlist">
+        <span class="material-symbols-outlined mr-2 text-[20px]">face</span>
         Yüz Laboratuvarı &amp; Liste
       </a>
-      <a class="flex items-center px-space-md py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#sec-metrics">
-        <span class="material-symbols-outlined mr-space-sm text-[20px]">analytics</span>
+      <a class="flex items-center px-4 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#sec-metrics">
+        <span class="material-symbols-outlined mr-2 text-[20px]">analytics</span>
         TÜBİTAK Hedefleri (1–4)
       </a>
     </nav>
-    <div class="px-space-lg pt-space-lg border-t border-outline-variant/20 space-y-2">
-      <div class="flex items-center gap-space-sm bg-surface-container px-space-sm py-2 rounded-lg border border-outline-variant/20">
+    <div class="px-6 pt-6 border-t border-outline-variant/20 space-y-2">
+      <div class="flex items-center gap-2 bg-surface-container px-3 py-2 rounded-lg border border-outline-variant/20">
         <span class="material-symbols-outlined text-tertiary text-[18px]">verified</span>
         <span class="text-xs text-on-surface-variant font-label-xs uppercase">KVKK 6698 Uyumlu</span>
       </div>
@@ -142,30 +108,52 @@
   </aside>
 
   <div class="xl:pl-64">
-    <!-- Top Glassmorphic Header -->
+    <!-- Üst Bilgi Çubuğu -->
     <header class="sticky top-0 h-16 bg-surface/85 backdrop-blur-xl z-40 flex items-center justify-between px-6 border-b border-outline-variant/20">
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full border border-outline-variant/30">
           <div class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></div>
-          <span class="text-xs font-label-xs text-on-surface">HIBRIT UÇ / BULUT AKTİF</span>
+          <span class="text-xs font-label-xs text-on-surface">HİBRİT UÇ / BULUT AKTİF</span>
         </div>
         <span class="text-sm font-headline text-on-surface hidden md:inline">
-          Yapay Zeka Destekli Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi
+          Yapay Zeka Destekli Şüpheli Davranış, Risk Skorlama, Alarm ve Adil Yüz Tanıma Sistemi
         </span>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5">
         <span id="toastStatus" class="text-xs font-label-xs text-primary bg-primary/10 px-3 py-1 rounded-full hidden"></span>
-        <div class="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full border border-outline-variant/30">
+        <button id="btnMuteSiren" onclick="toggleSirenMute()" class="text-xs font-label-xs bg-surface-container hover:bg-surface-container-high text-on-surface px-3 py-1 rounded-full border border-outline-variant/30 cursor-pointer">
+          🔔 Siren: AÇIK
+        </button>
+        <div class="flex items-center gap-1.5 bg-surface-container px-3 py-1 rounded-full border border-outline-variant/30">
           <span class="material-symbols-outlined text-primary text-[16px]">speed</span>
-          <span id="headerFps" class="text-xs font-label-xs text-primary">FPS: --</span>
+          <span id="headerFps" class="text-xs font-label-xs text-primary">Hız: -- FPS</span>
         </div>
       </div>
     </header>
 
-    <main class="relative pt-6 bg-surface min-h-screen">
+    <main class="relative pt-5 bg-surface min-h-screen">
       <div class="flex flex-col w-full px-6 pb-12 max-w-[1600px] mx-auto">
 
-        <!-- Top Overview Banner -->
+        <!-- Acil Durum Alarm Uyarı Şeridi (Aktif alarm olduğunda görünür) -->
+        <div id="emergencyAlarmBanner" class="hidden w-full bg-error-container/45 border-2 border-error rounded-xl p-4 mb-5 flex flex-wrap items-center justify-between gap-4 siren-active">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-error text-[30px] animate-bounce">emergency</span>
+            <div>
+              <div id="bannerTitle" class="text-sm font-headline font-bold text-error uppercase">KRİTİK GÜVENLİK ALARMI AKTİF!</div>
+              <div id="bannerDesc" class="text-xs text-on-surface mt-0.5">--</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="resolveAllAlarms()" class="bg-error text-on-error font-headline font-semibold text-xs px-4 py-2 rounded-lg cursor-pointer hover:opacity-90">
+              ✅ Tüm Aktif Alarmları Kapat
+            </button>
+            <button onclick="toggleSirenMute()" class="bg-surface-container text-on-surface font-label-xs text-xs px-3 py-2 rounded-lg border border-outline-variant/40 cursor-pointer">
+              🔇 Sireni Sustur
+            </button>
+          </div>
+        </div>
+
+        <!-- Üst Özet Şeridi -->
         <div id="sec-live" class="w-full bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 shadow-lg border border-outline-variant/20">
           <div class="flex flex-wrap items-center gap-3">
             <div class="flex items-center gap-1.5 bg-tertiary/10 text-tertiary px-3.5 py-1.5 rounded-full border border-tertiary/30">
@@ -176,52 +164,55 @@
               <span class="material-symbols-outlined text-[18px]">hub</span>
               <span class="text-xs font-label-sm uppercase tracking-wider">YOLOv5m + DeepSORT + ArcFace 512-D</span>
             </div>
+            <div id="topRiskPill" class="flex items-center gap-1.5 bg-tertiary/10 text-tertiary px-3.5 py-1.5 rounded-full border border-tertiary/30">
+              <span class="material-symbols-outlined text-[18px]">radar</span>
+              <span id="topRiskPillText" class="text-xs font-label-sm uppercase tracking-wider">Anlık Maksimum Risk: %0</span>
+            </div>
           </div>
-          <div class="flex flex-wrap items-center gap-5">
+          <div class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-tertiary animate-ping"></span>
-              <span id="milvusStatusText" class="text-xs font-label-sm text-primary uppercase">MILVUS VECTOR DB: BAĞLANIYOR...</span>
+              <span id="milvusStatusText" class="text-xs font-label-sm text-primary uppercase">Milvus Vektör VT: Bağlanıyor...</span>
             </div>
           </div>
         </div>
 
-        <!-- Main Grid (2 Columns: 2/3 Left Camera & Controls, 1/3 Right Milvus Match Feed) -->
+        <!-- Ana 2 Sütunlu Çalışma Alanı -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <!-- Left Column: Live Camera Feed Player + Easy Action Toolbar + 4 KPI Cards -->
+          <!-- Sol Sütun: Canlı Kamera Akışı + Kontroller + KPI Kartları -->
           <div class="lg:col-span-2 flex flex-col gap-4">
             <div class="relative w-full aspect-video bg-surface-container-lowest rounded-xl overflow-hidden shadow-xl border border-outline-variant/30">
-              <img id="liveStreamImg" src="/api/v1/stream/video" alt="Canlı Kamera / Uç Katmanı Akışı" class="w-full h-full object-contain" />
-              <!-- HUD Overlay Badges -->
+              <img id="liveStreamImg" src="/api/v1/stream/video" alt="Canlı Uç Katmanı Video Akışı" class="w-full h-full object-contain" />
               <div class="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
                 <div class="flex justify-between items-start">
                   <div class="bg-surface/80 backdrop-blur-md px-3 py-1 rounded flex items-center gap-2 border border-outline-variant/30">
                     <span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
-                    <span id="camIdBadge" class="text-xs font-label-xs text-on-surface">CAM-01 // EDGE_STREAM</span>
+                    <span class="text-xs font-label-xs text-on-surface">KAM-01 // UÇ KATMANI CANLI AKIŞI</span>
                   </div>
                   <div class="bg-surface/80 backdrop-blur-md px-3 py-1 rounded text-xs font-label-xs text-tertiary border border-tertiary/30">
-                    HAM VİDEO YERELDE KORUNUYOR (100% KVKK)
+                    HAM VİDEO YERELDE KORUNUYOR (%100 KVKK)
                   </div>
                 </div>
                 <div class="flex justify-between items-end text-[11px] font-label-xs text-on-surface-variant bg-surface/70 backdrop-blur-sm px-3 py-1 rounded self-stretch">
-                  <span>UÇ KATMANI: YOLOv5m + DeepSORT (Kalman + 512D Re-ID)</span>
-                  <span>BULUT: ARCFACE 512-D + FAIRFACE + MILVUS COSINE</span>
+                  <span>UÇ: YOLOv5m + DeepSORT + Risk Yüzdesi Motoru</span>
+                  <span>BULUT: ARCFACE 512-D + FAIRFACE + MİLVUS + ALARM</span>
                 </div>
               </div>
             </div>
 
-            <!-- Simple 1-Click Action Buttons + Threshold Selector -->
+            <!-- Hızlı Kontrol Araç Çubuğu -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <button onclick="setSource('webcam')" class="bg-surface-container hover:bg-surface-container-high text-on-surface py-3 px-4 rounded-xl font-headline text-sm font-semibold flex items-center justify-center gap-2 transition-all border border-primary/40 shadow-sm cursor-pointer">
                 <span class="material-symbols-outlined text-primary text-[20px]">photo_camera_front</span>
-                Laptop Kamerası
+                Dizüstü Kamerası
               </button>
               <button onclick="setSource('demo')" class="bg-surface-container hover:bg-surface-container-high text-on-surface py-3 px-4 rounded-xl font-headline text-sm font-semibold flex items-center justify-center gap-2 transition-all border border-outline-variant/30 shadow-sm cursor-pointer">
                 <span class="material-symbols-outlined text-primary text-[20px]">movie</span>
-                Demo CCTV Videosu
+                Örnek CCTV Videosu
               </button>
               <button onclick="triggerAlertNow()" class="bg-error-container/30 hover:bg-error-container/50 text-error py-3 px-4 rounded-xl font-headline text-sm font-semibold flex items-center justify-center gap-2 transition-all border border-error/50 shadow-sm cursor-pointer">
                 <span class="material-symbols-outlined text-[20px]">warning</span>
-                Şimdi Uyarı Tetikle
+                Şimdi Olay Tetikle
               </button>
               <div class="bg-surface-container rounded-xl px-3 py-2 flex flex-col justify-center border border-outline-variant/30">
                 <label class="text-[10px] font-label-xs text-on-surface-variant uppercase">Bekleme Süresi Eşiği</label>
@@ -234,11 +225,11 @@
               </div>
             </div>
 
-            <!-- 6 Smart AI Extensions Control Deck -->
+            <!-- 6 Akıllı Yapay Zeka Modülü Kontrol Paneli -->
             <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/20 flex flex-wrap items-center justify-between gap-2">
               <span class="text-xs font-label-xs text-primary uppercase flex items-center gap-1">
                 <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
-                Akıllı AI Modülleri:
+                Akıllı YZ Modülleri:
               </span>
               <div class="flex flex-wrap items-center gap-2">
                 <button id="btnKvkkBlur" onclick="toggleSmartFeature('kvkk_dynamic_blur')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-tertiary/15 text-tertiary border border-tertiary/40 cursor-pointer transition-all">
@@ -248,7 +239,7 @@
                   🔮 3sn Yörünge Tahmini: AÇIK
                 </button>
                 <button id="btnPose" onclick="toggleSmartFeature('pose_estimation_enabled')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/40 cursor-pointer transition-all">
-                  🦴 İskelet &amp; Poz: AÇIK
+                  🦴 İskelet ve Poz: AÇIK
                 </button>
                 <button id="btnHeatmap" onclick="toggleSmartFeature('heatmap_enabled')" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant border border-outline-variant/30 cursor-pointer transition-all">
                   🔥 Canlı Isı Haritası: KAPALI
@@ -257,15 +248,15 @@
                   🎒 Terk Edilmiş Çanta Testi: KAPALI
                 </button>
                 <button id="btnVoiceTts" onclick="toggleVoiceTts()" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-tertiary/15 text-tertiary border border-tertiary/40 cursor-pointer transition-all">
-                  🔊 Sesli Alarm: AÇIK
+                  🔊 Sesli Anons: AÇIK
                 </button>
                 <button onclick="sendTelegramAlert()" class="text-xs font-label-xs px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 cursor-pointer transition-all">
-                  📲 Telegram'a Gönder
+                  📲 Telegram İhbarı
                 </button>
               </div>
             </div>
 
-            <!-- 4 Live KPI Metric Badges -->
+            <!-- 4 Canlı Performans Göstergesi -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-1 border border-outline-variant/20">
                 <span class="text-[11px] font-label-xs text-on-surface-variant uppercase">Anlık Hız (FPS)</span>
@@ -280,18 +271,18 @@
                 <span id="statTracks" class="text-2xl font-headline font-bold text-tertiary">0</span>
               </div>
               <div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-1 border border-outline-variant/20">
-                <span class="text-[11px] font-label-xs text-on-surface-variant uppercase">KVKK Korunan Kare</span>
+                <span class="text-[11px] font-label-xs text-on-surface-variant uppercase">KVKK Yerel Kare</span>
                 <span id="statEdgeFrames" class="text-2xl font-headline font-bold text-primary">0</span>
               </div>
             </div>
           </div>
 
-          <!-- Right Column: Security Alerts & Milvus Matches Feed -->
-          <div class="bg-surface-container-low rounded-xl p-5 flex flex-col gap-4 shadow-xl border border-outline-variant/20">
+          <!-- Sağ Sütun: Milvus Eşleşme, Risk ve Adli Arama Akışı -->
+          <div class="bg-surface-container-low rounded-xl p-5 flex flex-col gap-3.5 shadow-xl border border-outline-variant/20">
             <div class="flex items-center justify-between pb-3 border-b border-outline-variant/20">
               <h3 class="text-base font-headline font-semibold text-on-surface flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary text-[20px]">notifications_active</span>
-                Milvus Eşleşme &amp; Uyarı Akışı
+                Bulut Eşleşme ve Olay Akışı
               </h3>
               <div class="flex items-center gap-2">
                 <span id="eventsCountBadge" class="text-xs font-label-xs text-tertiary bg-tertiary/10 px-2.5 py-1 rounded-full">0 Olay</span>
@@ -301,53 +292,95 @@
               </div>
             </div>
 
-            <!-- Natural Language Forensic Search Bar -->
-            <div class="relative">
-              <input type="text" id="forensicSearchInput" oninput="runForensicSearch(this.value)" placeholder="🔍 Adli Arama: kıyafet rengi (Siyah, Beyaz), bölge, isim, poz..." class="w-full bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-xs text-on-surface focus:border-primary focus:outline-none" />
-            </div>
+            <!-- Doğal Dilde Adli Arama Çubuğu -->
+            <input type="text" id="forensicSearchInput" oninput="runForensicSearch(this.value)" placeholder="🔍 Adli Arama: kıyafet rengi (Siyah, Gri), bölge, poz, risk (KRİTİK)..." class="w-full bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-xs text-on-surface focus:border-primary focus:outline-none" />
 
-            <div id="alertList" class="flex flex-col gap-3 overflow-y-auto max-h-[560px] pr-1">
+            <div id="alertList" class="flex flex-col gap-3 overflow-y-auto max-h-[580px] pr-1">
               <div class="bg-surface-container p-6 rounded-xl text-center text-sm text-on-surface-variant border border-outline-variant/10">
-                Şüpheli bekleme (Loitering) tespit edildiğinde veya "Şimdi Uyarı Tetikle" butonuna basıldığında kırpılan yüz ve Milvus eşleşme sonucu burada görüntülenir.
+                Şüpheli bekleme tespit edildiğinde veya "Şimdi Olay Tetikle" butonuna basıldığında kırpılan yüz, risk yüzdesi ve Milvus eşleşme sonucu burada görüntülenir.
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Bottom Row (2 Columns: Left = Watchlist & Instant Photo Test Lab, Right = TÜBİTAK 2209-A Targets) -->
+        <!-- YENİ BÖLÜM: Kişi Risk Yüzdesi Paneli + Çok Seviyeli Alarm ve İhbar Merkezi -->
+        <div id="sec-risk-alarms" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Sol Kart: Canlı Kişi Risk Yüzdesi (%0 - %100) -->
+          <div class="bg-surface-container-low rounded-xl p-6 shadow-xl border border-outline-variant/20 flex flex-col">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-outline-variant/20">
+              <h3 class="text-lg font-headline font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[22px]">radar</span>
+                Canlı Kişi Risk Yüzdesi Motoru (%0 – %100)
+              </h3>
+              <span class="text-xs font-label-xs text-primary bg-primary/10 px-2.5 py-1 rounded-full">5 Faktörlü Ağırlıklı Model</span>
+            </div>
+            <p class="text-xs text-on-surface-variant mb-4">
+              Ekrandaki her kişi için Bölge Süresi (%25) + Yörünge Verimsizliği (%20) + Poz/Eylem (%15) + Milvus Biyometrik (%30) + Canlılık (%10) bileşenlerinden anlık risk yüzdesi hesaplanır.
+            </p>
+            <div id="livePersonRiskList" class="flex flex-col gap-3 overflow-y-auto max-h-[340px] pr-1">
+              <div class="bg-surface-container p-5 rounded-xl text-center text-xs text-on-surface-variant">
+                Kamerada tespit edilen aktif kişi bekleniyor...
+              </div>
+            </div>
+          </div>
+
+          <!-- Sağ Kart: Çok Seviyeli Alarm ve İhbar Merkezi -->
+          <div class="bg-surface-container-low rounded-xl p-6 shadow-xl border border-outline-variant/20 flex flex-col">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-3 border-b border-outline-variant/20">
+              <h3 class="text-lg font-headline font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-error text-[22px]">campaign</span>
+                Güvenlik Alarm ve İhbar Merkezi
+              </h3>
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="alarmBadgeSummary" class="text-xs font-label-xs text-tertiary bg-tertiary/10 px-2.5 py-1 rounded-full">0 Aktif Alarm</span>
+                <button onclick="triggerTestAlarm()" class="text-xs font-label-xs bg-error-container/40 hover:bg-error-container/60 text-error px-3 py-1 rounded-lg border border-error/50 cursor-pointer">
+                  🚨 Acil Alarm Testi
+                </button>
+                <a href="/api/v1/alarms/export" class="text-xs font-label-xs bg-surface-container hover:bg-surface-container-high text-primary px-3 py-1 rounded-lg border border-primary/30">
+                  📥 Rapor İndir (JSON)
+                </a>
+                <button onclick="clearAlarms()" class="text-xs font-label-xs bg-surface-container hover:bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-lg border border-outline-variant/30 cursor-pointer">
+                  Temizle
+                </button>
+              </div>
+            </div>
+            <div id="alarmsListContainer" class="flex flex-col gap-3 overflow-y-auto max-h-[370px] pr-1">
+              <div class="bg-surface-container p-5 rounded-xl text-center text-xs text-on-surface-variant">
+                Henüz kayıtlı güvenlik alarmı yok. Sistem kritik eşiği aştığında otomatik alarm üretir.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alt Sıra (2 Sütun: Sol = Yüz Laboratuvarı ve İzleme Listesi, Sağ = TÜBİTAK Hedefleri) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Left Card: 1-Click Photo Upload & Watchlist Lab -->
           <div id="sec-watchlist" class="bg-surface-container-low rounded-xl p-6 flex flex-col justify-between shadow-xl border border-outline-variant/20">
             <div>
               <div class="flex items-center justify-between mb-3">
                 <h3 class="text-lg font-headline font-semibold text-on-surface flex items-center gap-2">
                   <span class="material-symbols-outlined text-primary text-[22px]">cloud_upload</span>
-                  Yüz Laboratuvarı &amp; Milvus İzleme Listesi (Watchlist)
+                  Yüz Laboratuvarı ve Milvus İzleme Listesi
                 </h3>
-                <span class="text-xs font-label-xs text-primary bg-primary/10 px-3 py-1 rounded-full">ArcFace 512-D • COSINE</span>
+                <span class="text-xs font-label-xs text-primary bg-primary/10 px-3 py-1 rounded-full">ArcFace 512-D • Kosinüs</span>
               </div>
               <p class="text-sm text-on-surface-variant mb-4">
-                Tek tıkla bir fotoğraf yükleyerek 512-boyutlu ArcFace vektörünü çıkarın, Milvus veritabanında arayın veya yeni şüpheli olarak kaydedin.
+                Tek tıkla bir fotoğraf yükleyerek 512 boyutlu ArcFace vektörünü çıkarın, Milvus veritabanında arayın veya izleme listesine yeni kişi ekleyin.
               </p>
 
-              <!-- Easy Dropzone / Quick Test & Enroll Form -->
               <form id="quickLabForm" onsubmit="handleLabSubmit(event)" class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 mb-4 space-y-3">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input type="text" id="labPersonName" name="enroll_name" placeholder="Kaydedilecek İsim (Sadece arama için boş bırakın)" class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none" />
+                  <input type="text" id="labPersonName" name="enroll_name" placeholder="Kaydedilecek İsim (Yalnızca arama için boş bırakın)" class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none" />
                   <input type="file" id="labFileInput" name="file" accept="image/*" required class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3 py-1.5 text-xs text-on-surface-variant file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-on-primary file:font-semibold cursor-pointer" />
                 </div>
-                <div class="flex items-center justify-between gap-3">
-                  <button type="submit" class="w-full bg-primary hover:bg-primary-fixed text-on-primary font-headline font-semibold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition-all cursor-pointer">
-                    <span class="material-symbols-outlined text-[18px]">person_search</span>
-                    Fotoğrafı Analiz Et / Milvus Listesine Ekle
-                  </button>
-                </div>
+                <button type="submit" class="w-full bg-primary hover:bg-primary-fixed text-on-primary font-headline font-semibold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition-all cursor-pointer">
+                  <span class="material-symbols-outlined text-[18px]">person_search</span>
+                  Fotoğrafı Analiz Et / Milvus Listesine Ekle
+                </button>
               </form>
 
               <div id="customTestResult" class="mb-4"></div>
             </div>
 
-            <!-- Active Watchlist Identities -->
             <div>
               <div class="text-xs font-label-xs text-on-surface-variant uppercase mb-2 flex justify-between">
                 <span>Milvus'ta Kayıtlı İzleme Listesi Profilleri</span>
@@ -357,13 +390,12 @@
             </div>
           </div>
 
-          <!-- Right Card: 4 TÜBİTAK Target Status Cards + FairFace Audit -->
           <div id="sec-metrics" class="bg-surface-container-low rounded-xl p-6 flex flex-col justify-between shadow-xl border border-outline-variant/20">
             <div>
               <div class="flex items-center justify-between mb-3">
                 <h3 class="text-lg font-headline font-semibold text-on-surface flex items-center gap-2">
                   <span class="material-symbols-outlined text-tertiary text-[22px]">flag</span>
-                  TÜBİTAK 2209-A Başarı Ölçütleri &amp; FairFace Denetimi
+                  TÜBİTAK 2209-A Başarı Ölçütleri ve FairFace Denetimi
                 </h3>
                 <button onclick="rerunBenchmarks()" class="text-xs font-label-xs text-on-primary bg-tertiary hover:opacity-90 px-3 py-1.5 rounded-full font-semibold flex items-center gap-1 cursor-pointer">
                   <span class="material-symbols-outlined text-[15px]">refresh</span>
@@ -375,7 +407,6 @@
               </p>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                <!-- Hedef 01 -->
                 <div class="bg-surface-container p-4 rounded-xl flex flex-col gap-1.5 border border-outline-variant/20">
                   <div class="flex justify-between items-center">
                     <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 01 (4x 1080p Akış)</span>
@@ -388,23 +419,21 @@
                   <span id="h1Sub" class="text-[11px] font-label-xs text-on-surface-variant">Toplam: -- FPS</span>
                 </div>
 
-                <!-- Hedef 02 -->
                 <div class="bg-surface-container p-4 rounded-xl flex flex-col gap-1.5 border border-outline-variant/20">
                   <div class="flex justify-between items-center">
-                    <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 02 (Loitering F1)</span>
+                    <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 02 (Oyalanma F1)</span>
                     <span id="h2Val" class="text-xs font-label-xs text-primary font-bold">F1: --</span>
                   </div>
                   <span class="text-sm font-headline font-semibold text-on-surface">Davranış Tespiti (&gt;=0.80 F1)</span>
                   <div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden mt-1">
                     <div class="bg-primary h-full w-[100%]"></div>
                   </div>
-                  <span id="h2Sub" class="text-[11px] font-label-xs text-on-surface-variant">Precision: -- | Recall: --</span>
+                  <span id="h2Sub" class="text-[11px] font-label-xs text-on-surface-variant">Kesinlik: -- | Duyarlılık: --</span>
                 </div>
 
-                <!-- Hedef 03 -->
                 <div class="bg-surface-container p-4 rounded-xl flex flex-col gap-1.5 border border-outline-variant/20">
                   <div class="flex justify-between items-center">
-                    <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 03 (@ FAR=0.1%)</span>
+                    <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 03 (@ FAR=%0.1)</span>
                     <span id="h3Val" class="text-xs font-label-xs text-tertiary font-bold">FRR: --%</span>
                   </div>
                   <span class="text-sm font-headline font-semibold text-on-surface">Yüz Tanıma Doğruluğu (FRR &lt; %5)</span>
@@ -414,7 +443,6 @@
                   <span id="h3Sub" class="text-[11px] font-label-xs text-on-surface-variant">EER: --%</span>
                 </div>
 
-                <!-- Hedef 04 -->
                 <div class="bg-surface-container p-4 rounded-xl flex flex-col gap-1.5 border border-outline-variant/20">
                   <div class="flex justify-between items-center">
                     <span class="text-xs font-label-xs text-on-surface-variant">HEDEF 04 (FairFace Denetimi)</span>
@@ -429,7 +457,6 @@
               </div>
             </div>
 
-            <!-- 7-Group FairFace Comparison -->
             <div>
               <div class="text-xs font-label-xs text-on-surface-variant uppercase mb-2">
                 FairFace 7 Demografik Grup FNMR (@ FAR=0.001) Karşılaştırması
@@ -452,14 +479,39 @@
       simulated_abandoned_bag: false
     };
     let voiceTtsEnabled = true;
+    let sirenMuted = false;
     let lastSpokenEventId = null;
+    let lastSirenAlarmId = null;
     let activeSearchQuery = "";
 
     function showToast(msg) {
       const el = document.getElementById('toastStatus');
       el.textContent = msg;
       el.classList.remove('hidden');
-      setTimeout(() => el.classList.add('hidden'), 3000);
+      setTimeout(() => el.classList.add('hidden'), 3200);
+    }
+
+    function playSecuritySiren() {
+      if (sirenMuted) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(660, now);
+        osc.frequency.linearRampToValueAtTime(980, now + 0.25);
+        osc.frequency.linearRampToValueAtTime(660, now + 0.50);
+        osc.frequency.linearRampToValueAtTime(980, now + 0.75);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.85);
+      } catch (e) {}
     }
 
     function speakAlert(text) {
@@ -490,7 +542,7 @@
       };
       setBtn('btnKvkkBlur', '🛡️ KVKK Yüz Maskeleme', smartState.kvkk_dynamic_blur, 'tertiary');
       setBtn('btnPred', '🔮 3sn Yörünge Tahmini', smartState.trajectory_prediction_enabled, 'primary');
-      setBtn('btnPose', '🦴 İskelet & Poz', smartState.pose_estimation_enabled, 'primary');
+      setBtn('btnPose', '🦴 İskelet ve Poz', smartState.pose_estimation_enabled, 'primary');
       setBtn('btnHeatmap', '🔥 Canlı Isı Haritası', smartState.heatmap_enabled, 'tertiary');
       setBtn('btnBagTest', '🎒 Terk Edilmiş Çanta Testi', !!smartState.simulated_abandoned_bag, 'error');
     }
@@ -504,7 +556,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: nextVal })
       });
-      showToast(`${key} -> ${nextVal ? 'AÇIK' : 'KAPALI'}`);
+      showToast(`Modül durumu güncellendi: ${nextVal ? 'AÇIK' : 'KAPALI'}`);
     }
 
     async function simulateAbandonedBag() {
@@ -516,20 +568,59 @@
       const data = await res.json();
       if (data.smart_features) updateSmartButtonsUI(data.smart_features);
       const isOn = !!(data.smart_features && data.smart_features.simulated_abandoned_bag);
-      showToast(isOn ? '🎒 Terk edilmiş sırt çantası senaryosu AKTİF!' : '🎒 Terk edilmiş çanta testi kapatıldı.');
+      showToast(isOn ? '🎒 Terk edilmiş çanta senaryosu AKTİF edildi!' : '🎒 Terk edilmiş çanta testi kapatıldı.');
     }
 
     function toggleVoiceTts() {
       voiceTtsEnabled = !voiceTtsEnabled;
-      const el = document.getElementById('btnVoiceTts');
-      el.textContent = `🔊 Sesli Alarm: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`;
-      showToast(`Sesli Alarm: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`);
+      document.getElementById('btnVoiceTts').textContent = `🔊 Sesli Anons: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`;
+      showToast(`Sesli Anons: ${voiceTtsEnabled ? 'AÇIK' : 'KAPALI'}`);
+    }
+
+    async function toggleSirenMute() {
+      const res = await fetch('/api/v1/alarms/mute', { method: 'POST' });
+      const data = await res.json();
+      sirenMuted = !!data.siren_susturuldu;
+      document.getElementById('btnMuteSiren').textContent = sirenMuted ? '🔕 Siren: SUSTURULDU' : '🔔 Siren: AÇIK';
+      showToast(sirenMuted ? 'Alarm sireni susturuldu.' : 'Alarm sireni etkinleştirildi.');
+    }
+
+    async function triggerTestAlarm() {
+      await fetch('/api/v1/alarms/test', { method: 'POST' });
+      playSecuritySiren();
+      speakAlert('Dikkat! Acil güvenlik alarmı test edildi.');
+      showToast('🚨 Acil test alarmı tetiklendi!');
+      refreshState();
+    }
+
+    async function acknowledgeAlarm(alarmId) {
+      await fetch(`/api/v1/alarms/${alarmId}/acknowledge`, { method: 'POST' });
+      showToast(`Alarm ${alarmId} onaylandı.`);
+      refreshState();
+    }
+
+    async function resolveAlarm(alarmId) {
+      await fetch(`/api/v1/alarms/${alarmId}/resolve`, { method: 'POST' });
+      showToast(`Alarm ${alarmId} çözüldü olarak kapatıldı.`);
+      refreshState();
+    }
+
+    async function resolveAllAlarms() {
+      await fetch('/api/v1/alarms/resolve-all', { method: 'POST' });
+      showToast('Tüm aktif alarmlar kapatıldı.');
+      refreshState();
+    }
+
+    async function clearAlarms() {
+      await fetch('/api/v1/alarms/clear', { method: 'POST' });
+      showToast('Alarm geçmişi temizlendi.');
+      refreshState();
     }
 
     async function sendTelegramAlert() {
       const res = await fetch('/api/v1/notify/telegram', { method: 'POST' });
       const data = await res.json();
-      showToast(data.message || (data.sent ? '📲 Telegram bildirimi gönderildi!' : '📲 Telegram mesajı hazırlandı'));
+      showToast(data.message || (data.sent ? '📲 Telegram ihbarı gönderildi!' : '📲 Telegram mesajı hazırlandı'));
     }
 
     async function runForensicSearch(q) {
@@ -544,33 +635,48 @@
         const eventsUrl = activeSearchQuery
           ? `/api/v1/events/search?q=${encodeURIComponent(activeSearchQuery)}`
           : '/api/v1/events';
-        const [healthRes, eventsRes, wlRes] = await Promise.all([
+        const [healthRes, eventsRes, wlRes, alarmsRes] = await Promise.all([
           fetch('/api/v1/health'),
           fetch(eventsUrl),
-          fetch('/api/v1/watchlist')
+          fetch('/api/v1/watchlist'),
+          fetch('/api/v1/alarms')
         ]);
         const health = await healthRes.json();
         const eventsData = await eventsRes.json();
         const wlData = await wlRes.json();
+        const alarmsData = await alarmsRes.json();
 
         const tel = health.edge_telemetry || {};
         const fpsStr = (tel.fps || 0).toFixed(1);
         document.getElementById('statFps').textContent = fpsStr;
-        document.getElementById('headerFps').textContent = `FPS: ${fpsStr}`;
+        document.getElementById('headerFps').textContent = `Hız: ${fpsStr} FPS`;
         document.getElementById('statDets').textContent = tel.active_detections || 0;
         document.getElementById('statTracks').textContent = tel.active_tracks || 0;
         document.getElementById('statEdgeFrames').textContent = tel.frames_processed_on_edge || 0;
         document.getElementById('milvusStatusText').textContent = `${health.milvus.backend} (${health.milvus.watchlist_count} Kayıt)`;
 
-        if (health.smart_features) {
-          updateSmartButtonsUI(health.smart_features);
+        const maxRisk = Number(tel.max_active_risk_percent || 0);
+        const topRiskPill = document.getElementById('topRiskPill');
+        const topRiskText = document.getElementById('topRiskPillText');
+        topRiskText.textContent = `Anlık Maksimum Risk: %${maxRisk.toFixed(0)}`;
+        if (maxRisk >= 80) {
+          topRiskPill.className = "flex items-center gap-1.5 bg-error-container/40 text-error px-3.5 py-1.5 rounded-full border border-error/50";
+        } else if (maxRisk >= 55) {
+          topRiskPill.className = "flex items-center gap-1.5 bg-yellow-500/20 text-yellow-300 px-3.5 py-1.5 rounded-full border border-yellow-400/50";
+        } else {
+          topRiskPill.className = "flex items-center gap-1.5 bg-tertiary/10 text-tertiary px-3.5 py-1.5 rounded-full border border-tertiary/30";
         }
+
+        if (health.smart_features) updateSmartButtonsUI(health.smart_features);
+
+        renderLivePersonRisks(health.active_person_risks || []);
+        renderAlarms(alarmsData.summary || {}, alarmsData.alarms || []);
 
         const evList = eventsData.events || [];
         if (evList.length > 0 && evList[0].event_id !== lastSpokenEventId) {
           lastSpokenEventId = evList[0].event_id;
           if (evList[0].watchlist_hit && evList[0].best_match) {
-            speakAlert(`Dikkat! ${evList[0].roi_name} bölgesinde Milvus izleme listesi eşleşmesi tespit edildi: ${evList[0].best_match.name}`);
+            speakAlert(`Dikkat! ${evList[0].roi_name} bölgesinde Milvus eşleşmesi: ${evList[0].best_match.name}. Risk oranı yüzde ${Math.round(evList[0].risk_percent || 75)}.`);
           }
         }
 
@@ -581,8 +687,115 @@
       }
     }
 
+    function renderLivePersonRisks(risks) {
+      const container = document.getElementById('livePersonRiskList');
+      if (!risks.length) {
+        container.innerHTML = `<div class="bg-surface-container p-5 rounded-xl text-center text-xs text-on-surface-variant">Kamerada tespit edilen aktif kişi bekleniyor...</div>`;
+        return;
+      }
+      container.innerHTML = risks.map(r => {
+        const pct = Math.min(100, Math.max(0, Number(r.risk_percent || 0)));
+        let barColor = 'bg-tertiary';
+        let badgeCls = 'bg-tertiary/15 text-tertiary border-tertiary/40';
+        if (pct >= 80) {
+          barColor = 'bg-error';
+          badgeCls = 'bg-error-container/50 text-error border-error/50';
+        } else if (pct >= 55) {
+          barColor = 'bg-orange-400';
+          badgeCls = 'bg-orange-500/20 text-orange-300 border-orange-400/40';
+        } else if (pct >= 30) {
+          barColor = 'bg-yellow-400';
+          badgeCls = 'bg-yellow-500/15 text-yellow-300 border-yellow-400/40';
+        }
+        const bd = r.breakdown || {};
+        return `
+          <div class="bg-surface-container p-3.5 rounded-xl border border-outline-variant/25 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="font-headline font-bold text-sm text-on-surface">İz #${r.track_id}</span>
+                <span class="text-[11px] font-label-xs text-on-surface-variant">${r.behavior_status} • ${r.roi_name}</span>
+              </div>
+              <span class="text-xs font-label-xs font-bold px-2.5 py-0.5 rounded-full border ${badgeCls}">
+                Risk: %${pct.toFixed(0)} [${r.risk_tier}]
+              </span>
+            </div>
+            <div class="w-full bg-surface-container-high h-2.5 rounded-full overflow-hidden">
+              <div class="${barColor} h-full transition-all duration-300" style="width: ${pct}%"></div>
+            </div>
+            <div class="grid grid-cols-5 gap-1 text-[10px] font-label-xs text-on-surface-variant text-center">
+              <div class="bg-surface-container-low rounded py-1">Bölge: ${bd.roi_kalma_puani || 0}/25</div>
+              <div class="bg-surface-container-low rounded py-1">Yörünge: ${bd.yorunge_verimsizlik_puani || 0}/20</div>
+              <div class="bg-surface-container-low rounded py-1">Poz: ${bd.poz_eylem_puani || 0}/15</div>
+              <div class="bg-surface-container-low rounded py-1">Milvus: ${bd.biyometrik_milvus_puani || 0}/30</div>
+              <div class="bg-surface-container-low rounded py-1">Sahtecilik: ${bd.sahtecilik_puani || 0}/10</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAlarms(summary, alarms) {
+      sirenMuted = !!summary.siren_susturuldu;
+      document.getElementById('btnMuteSiren').textContent = sirenMuted ? '🔕 Siren: SUSTURULDU' : '🔔 Siren: AÇIK';
+
+      const activeCount = summary.aktif_alarm_sayisi || 0;
+      const badge = document.getElementById('alarmBadgeSummary');
+      badge.textContent = `${activeCount} Aktif / ${summary.toplam_alarm || 0} Toplam`;
+      badge.className = activeCount > 0
+        ? "text-xs font-label-xs text-error bg-error-container/40 px-2.5 py-1 rounded-full border border-error/50"
+        : "text-xs font-label-xs text-tertiary bg-tertiary/10 px-2.5 py-1 rounded-full";
+
+      const banner = document.getElementById('emergencyAlarmBanner');
+      const topAlm = summary.en_yuksek_aktif_alarm;
+      if (activeCount > 0 && topAlm) {
+        banner.classList.remove('hidden');
+        document.getElementById('bannerTitle').textContent = `🚨 [${topAlm.seviye}] ${topAlm.baslik} — Risk: %${topAlm.risk_yuzdesi}`;
+        document.getElementById('bannerDesc').textContent = `${topAlm.timestamp_str} • ${topAlm.bolge_adi} • ${topAlm.aciklama}`;
+        if (topAlm.alarm_id !== lastSirenAlarmId) {
+          lastSirenAlarmId = topAlm.alarm_id;
+          playSecuritySiren();
+        }
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      const container = document.getElementById('alarmsListContainer');
+      if (!alarms.length) {
+        container.innerHTML = `<div class="bg-surface-container p-5 rounded-xl text-center text-xs text-on-surface-variant">Henüz kayıtlı güvenlik alarmı yok. Sistem kritik eşiği aştığında otomatik alarm üretir.</div>`;
+        return;
+      }
+
+      container.innerHTML = alarms.map(alm => {
+        const isActive = alm.durum === 'AKTİF';
+        const isAck = alm.durum === 'ONAYLANDI';
+        const borderCls = alm.seviye === 'KRİTİK' ? 'border-error' : (alm.seviye === 'YÜKSEK' ? 'border-orange-400' : 'border-primary');
+        const stateBadge = isActive
+          ? `<span class="text-[10px] font-label-xs bg-error-container/50 text-error px-2 py-0.5 rounded border border-error/40">AKTİF</span>`
+          : (isAck
+            ? `<span class="text-[10px] font-label-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">ONAYLANDI</span>`
+            : `<span class="text-[10px] font-label-xs bg-tertiary/15 text-tertiary px-2 py-0.5 rounded">ÇÖZÜLDÜ</span>`);
+        return `
+          <div class="bg-surface-container p-3.5 rounded-xl border-l-4 ${borderCls} space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-label-xs text-on-surface-variant">${alm.alarm_id} • ${alm.timestamp_str}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-label-xs text-primary bg-primary/10 px-2 py-0.5 rounded">Risk: %${alm.risk_yuzdesi}</span>
+                ${stateBadge}
+              </div>
+            </div>
+            <div class="text-xs font-headline font-semibold text-on-surface">${alm.baslik}</div>
+            <div class="text-[11px] text-on-surface-variant">${alm.aciklama}</div>
+            <div class="flex items-center gap-2 pt-1">
+              ${isActive ? `<button onclick="acknowledgeAlarm('${alm.alarm_id}')" class="text-[11px] font-label-xs bg-surface-container-high hover:bg-primary/20 text-primary px-2.5 py-1 rounded border border-primary/30 cursor-pointer">Onayla</button>` : ''}
+              ${alm.durum !== 'ÇÖZÜLDÜ' ? `<button onclick="resolveAlarm('${alm.alarm_id}')" class="text-[11px] font-label-xs bg-tertiary/15 hover:bg-tertiary/25 text-tertiary px-2.5 py-1 rounded border border-tertiary/30 cursor-pointer">Çözüldü İşaretle</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
     async function setSource(src) {
-      showToast(src === 'webcam' ? 'Laptop Kamerasına (/dev/video0) geçiliyor...' : 'Demo CCTV Senaryosuna geçiliyor...');
+      showToast(src === 'webcam' ? 'Dizüstü kamerasına (/dev/video0) geçiliyor...' : 'Örnek CCTV senaryosuna geçiliyor...');
       await fetch('/api/v1/controls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -591,7 +804,7 @@
     }
 
     async function setThreshold(val) {
-      showToast(`Bekleme süresi eşiği ${val} saniye olarak güncellendi`);
+      showToast(`Bekleme süresi eşiği ${val} saniye olarak güncellendi.`);
       await fetch('/api/v1/controls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -600,13 +813,13 @@
     }
 
     async function triggerAlertNow() {
-      showToast('Şüpheli bekleme uyarısı tetiklendi -> Bulut & Milvus analizi yapılıyor...');
+      showToast('Şüpheli olay tetiklendi -> Bulut, Risk ve Milvus analizi yapılıyor...');
       await fetch('/api/v1/controls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force_trigger_alert: true })
       });
-      setTimeout(refreshState, 400);
+      setTimeout(refreshState, 450);
     }
 
     async function clearEvents() {
@@ -627,15 +840,16 @@
       const res = await fetch('/api/v1/test/image', { method: 'POST', body: fd });
       const data = await res.json();
       const sr = data.search_result;
+      const ev = data.event || {};
       const hitBadge = sr.is_watchlist_hit && sr.best_match
-        ? `<span class="text-xs font-label-xs text-error bg-error-container/30 px-2 py-0.5 rounded border border-error/40">🚨 EŞLEŞME: ${sr.best_match.name} (SIM: ${(sr.best_match.cosine_similarity * 100).toFixed(1)}%)</span>`
-        : `<span class="text-xs font-label-xs text-tertiary bg-tertiary/10 px-2 py-0.5 rounded">✅ Eşleşme Yok</span>`;
+        ? `<span class="text-xs font-label-xs text-error bg-error-container/30 px-2 py-0.5 rounded border border-error/40">🚨 EŞLEŞME: ${sr.best_match.name} (Benzerlik: %${(sr.best_match.cosine_similarity * 100).toFixed(1)})</span>`
+        : `<span class="text-xs font-label-xs text-tertiary bg-tertiary/10 px-2 py-0.5 rounded">✅ İzleme Listesinde Eşleşme Yok</span>`;
       box.innerHTML = `
         <div class="bg-surface-container p-3 rounded-xl flex items-center gap-3 border border-primary/30">
           <img src="data:image/jpeg;base64,${data.aligned_face_b64}" class="w-14 h-14 rounded-lg object-cover border border-outline-variant/40" />
           <div class="flex-1 text-xs space-y-1">
-            <div class="font-headline font-semibold text-on-surface">112x112 Hizalanmış Yüz • FairFace Grup: <span class="text-primary">${data.demographic_group}</span></div>
-            <div class="text-on-surface-variant font-label-xs">512-D ArcFace Vektörü • Milvus Sorgu Süresi: ${sr.search_latency_ms} ms</div>
+            <div class="font-headline font-semibold text-on-surface">112x112 Hizalanmış Yüz • FairFace Grup: <span class="text-primary">${data.demographic_group}</span> • Risk: <span class="text-error">%${ev.risk_percent || 0}</span></div>
+            <div class="text-on-surface-variant font-label-xs">512-D ArcFace • Milvus Sorgu Süresi: ${sr.search_latency_ms} ms</div>
             <div>${hitBadge}</div>
           </div>
         </div>
@@ -648,30 +862,28 @@
       document.getElementById('eventsCountBadge').textContent = `${events.length} KVKK Olayı`;
       const container = document.getElementById('alertList');
       if (!events.length) {
-        container.innerHTML = `
-          <div class="bg-surface-container p-6 rounded-xl text-center text-sm text-on-surface-variant border border-outline-variant/10">
-            Şüpheli bekleme (Loitering) tespit edildiğinde veya "Şimdi Uyarı Tetikle" butonuna basıldığında kırpılan yüz ve Milvus eşleşme sonucu burada görüntülenir.
-          </div>`;
+        container.innerHTML = `<div class="bg-surface-container p-6 rounded-xl text-center text-sm text-on-surface-variant border border-outline-variant/10">Şüpheli bekleme tespit edildiğinde veya "Şimdi Olay Tetikle" butonuna basıldığında kırpılan yüz, risk yüzdesi ve Milvus eşleşme sonucu burada görüntülenir.</div>`;
         return;
       }
       container.innerHTML = events.map(ev => {
         const match = ev.best_match;
         const simPct = match ? Math.min(100, Math.max(5, (match.cosine_similarity * 100))).toFixed(1) : '0.0';
         const isHit = ev.watchlist_hit && match;
-        const borderClass = isHit ? 'border-primary' : 'border-outline';
-        const matchTitle = isHit ? match.name : `Track #${ev.track_id} (Kayıtsız Şahıs)`;
-        const matchSub = isHit ? `Risk: ${match.risk_level} • ${ev.roi_name}` : `${ev.roi_name} • İzleme Listesinde Yok`;
+        const borderClass = isHit ? 'border-error' : 'border-primary';
+        const matchTitle = isHit ? match.name : `İz #${ev.track_id} (Kayıtsız Şahıs)`;
+        const matchSub = isHit ? `Risk Seviyesi: ${match.risk_level} • ${ev.roi_name}` : `${ev.roi_name} • İzleme Listesinde Yok`;
         const refImgHtml = isHit && match.image_b64
           ? `<img src="data:image/jpeg;base64,${match.image_b64}" class="w-12 h-12 rounded-lg object-cover border border-primary/40" title="Milvus Referans Yüzü" />`
           : `<img src="data:image/jpeg;base64,${ev.aligned_face_b64}" class="w-12 h-12 rounded-lg object-cover border border-outline-variant/40" title="112x112 Hizalanmış Yüz" />`;
 
         return `
           <div class="bg-surface-container p-4 rounded-xl flex flex-col gap-2.5 border-l-4 ${borderClass}">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-2">
               <span class="text-[11px] font-label-xs text-on-surface-variant">${ev.timestamp_str} • ${ev.event_id}</span>
-              <span class="text-[11px] font-label-xs ${isHit ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-surface-container-high'} px-2 py-0.5 rounded">
-                SIM: %${simPct}
-              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] font-label-xs bg-error-container/35 text-error px-2 py-0.5 rounded border border-error/40">Risk: %${ev.risk_percent || 0}</span>
+                <span class="text-[11px] font-label-xs ${isHit ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-surface-container-high'} px-2 py-0.5 rounded">Benzerlik: %${simPct}</span>
+              </div>
             </div>
             <div class="flex items-center gap-3 my-0.5">
               <img src="data:image/jpeg;base64,${ev.cropped_person_b64}" class="w-12 h-12 rounded-lg object-cover border border-outline-variant/40" title="Uç Katmanından Kırpılan Şüpheli" />
@@ -688,11 +900,11 @@
             <div class="flex flex-wrap gap-1.5 text-[10px] font-label-xs">
               <span class="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded border border-tertiary/30">🛡️ ${ev.liveness_label || 'GERÇEK CANLI YÜZ'}</span>
               <span class="bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/30">👕 Üst: ${ev.upper_clothing || 'Koyu'}</span>
-              <span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded">🦴 ${ev.pose_action || 'STANDING'}</span>
+              <span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded">🦴 ${ev.pose_action || 'BEKLEME'}</span>
             </div>
             <div class="bg-surface-container-high px-2.5 py-1.5 rounded text-[11px] font-label-xs text-on-surface-variant flex items-center gap-1.5">
               <span class="material-symbols-outlined text-[15px] text-tertiary">psychology</span>
-              <span class="truncate">${ev.behavior_summary || `Süre: ${ev.dwell_time}sn • Verimlilik: ${ev.efficiency} • Grup: ${ev.demographic_group}`}</span>
+              <span class="truncate">${ev.behavior_summary}</span>
             </div>
           </div>
         `;
@@ -762,7 +974,7 @@
           <div class="bg-surface-container p-2.5 rounded-lg text-center border border-outline-variant/20">
             <div class="text-[11px] font-headline font-semibold text-on-surface truncate mb-1">${g.replace('_', ' ')}</div>
             <div class="text-[10px] font-label-xs text-error">Temel: %${bVal}</div>
-            <div class="text-[11px] font-label-xs text-tertiary font-bold">Fair: %${fVal}</div>
+            <div class="text-[11px] font-label-xs text-tertiary font-bold">Adil: %${fVal}</div>
           </div>
         `;
       }).join('');

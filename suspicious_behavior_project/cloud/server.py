@@ -1,14 +1,12 @@
-"""FastAPI Cloud Layer Service & Real-Time Interactive Web Dashboard (TÜBİTAK 2209-A).
+"""FastAPI Bulut Katmanı Servisi, Risk Puanlama, Alarm Merkezi ve Web Paneli (TÜBİTAK 2209-A).
 
-Provides:
-- KVKK-compliant Cloud endpoint (/api/v1/events/analyze) receiving ONLY cropped
-  suspect images + loitering metadata from the Edge Layer
-- 512-D ArcFace Face Embedding extraction with FairFace demographic calibration
-- Milvus Vector Database Watchlist search using Cosine Similarity
-- Interactive controls (/api/v1/controls) to switch video source (Webcam / Demo CCTV),
-  adjust loitering thresholds on the fly, trigger instant test alerts, and test custom
-  uploaded images or browser webcam snapshots (/api/v1/test/image)
-- Live MJPEG annotated video stream (/api/v1/stream/video) and Web Dashboard (/).
+Sağladığı servisler:
+- KVKK uyumlu Bulut uç noktası (/api/v1/events/analyze): Uç katmanından yalnızca
+  kırpılmış şüpheli görüntüsü ve davranış meta verilerini alır.
+- FairFace demografik kalibrasyonlu 512-D ArcFace yüz gömme çıkarımı.
+- Milvus Vektör Veritabanı (COSINE) izleme listesi araması.
+- Çok faktörlü Kişi Risk Yüzdesi (%0-%100) hesaplaması ve çok seviyeli Alarm Yönetimi.
+- Canlı MJPEG video akışı (/api/v1/stream/video) ve Google Stitch Web Gösterge Paneli (/).
 """
 
 import os
@@ -20,14 +18,13 @@ import cv2
 import numpy as np
 from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Ensure project root is on sys.path
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+PROJE_KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJE_KOK not in sys.path:
+    sys.path.insert(0, PROJE_KOK)
 
 from utils.helpers import load_config
 from utils.demo_video_generator import ensure_demo_assets
@@ -36,10 +33,12 @@ from modules.vector_db import MilvusWatchlistDB
 from modules.privacy_bridge import KVKKPrivacyBridge
 from modules.fairness_evaluator import TubitakEvaluationSuite
 from modules.smart_analytics import SmartIntelligenceEngine
+from modules.risk_scorer import PersonRiskScorer
+from modules.alarm_manager import AlarmSystemManager
 
 
 class EdgeEventPayload(BaseModel):
-    camera_id: str = "CAM-01-GIRIS"
+    camera_id: str = "KAM-01-GİRİŞ"
     track_id: int
     roi_name: str
     dwell_time: float
@@ -48,7 +47,8 @@ class EdgeEventPayload(BaseModel):
     kvkk_data_minimized: bool = True
     raw_stream_transmitted: bool = False
     cropped_image_b64: str
-    pose_action: Optional[str] = "STANDING (BEKLEME)"
+    pose_action: Optional[str] = "BEKLEME"
+    edge_risk_percent: Optional[float] = 0.0
 
 
 class RuntimeControlUpdate(BaseModel):
@@ -65,12 +65,13 @@ class RuntimeControlUpdate(BaseModel):
 
 
 class CloudPipelineEngine:
-    """Central Cloud Layer orchestrator managing ArcFace, Milvus Watchlist, and Alert History."""
+    """ArcFace, Milvus İzleme Listesi, Risk Motoru ve Alarm Yöneticisini koordine eden Bulut Katmanı."""
 
     def __init__(self, config_path: str = "config/config.yaml"):
         self.config = load_config(config_path)
         fr_cfg = self.config.get("face_recognition", {})
         mv_cfg = self.config.get("milvus", {})
+        alm_cfg = self.config.get("alarm_system", {})
 
         self.recognizer = FairFaceRecognizer(
             embedding_dim=int(fr_cfg.get("embedding_dim", 512)),
@@ -88,17 +89,25 @@ class CloudPipelineEngine:
         )
         self.evaluator = TubitakEvaluationSuite(self.config)
         self.smart_engine = SmartIntelligenceEngine()
+        self.risk_scorer = PersonRiskScorer()
+        self.alarm_manager = AlarmSystemManager(
+            log_path=alm_cfg.get("log_path", "data/alarms_log.json"),
+            cooldown_seconds=float(alm_cfg.get("cooldown_seconds", 15.0)),
+        )
+
         self.events_log: List[Dict[str, Any]] = []
+        self.active_person_risks: List[Dict[str, Any]] = []
         self.latest_benchmark: Optional[Dict[str, Any]] = None
         self.edge_telemetry: Dict[str, Any] = {
             "fps": 0.0,
             "active_detections": 0,
             "active_tracks": 0,
             "frames_processed_on_edge": 0,
+            "max_active_risk_percent": 0.0,
             "active_source": "auto",
             "time_threshold": 5.0,
             "efficiency_threshold": 0.30,
-            "camera_id": self.config["camera"].get("camera_id", "CAM-01-GIRIS"),
+            "camera_id": self.config["camera"].get("camera_id", "KAM-01-GİRİŞ"),
             "last_update": time.strftime("%H:%M:%S"),
         }
         self.runtime_controls: Dict[str, Any] = {
@@ -115,7 +124,7 @@ class CloudPipelineEngine:
         self.latest_benchmark = self.evaluator.run_all_benchmarks()
 
     def _seed_default_watchlist(self) -> None:
-        """Ensure default demo Watchlist identities exist so live demo shows immediate matches."""
+        """Örnek senaryonun anında çalışması için varsayılan izleme listesi kaydını oluşturur."""
         assets = ensure_demo_assets()
         if len(self.vector_db.list_identities()) == 0:
             s1_img = cv2.imread(assets["suspect1_image"])
@@ -127,10 +136,10 @@ class CloudPipelineEngine:
                     person_id="WL-2209-01",
                     name="Şüpheli #1 (Kırmızı İzleme Listesi)",
                     embedding=emb,
-                    risk_level="CRITICAL",
-                    demographic_group="Middle_Eastern",
+                    risk_level="KRİTİK",
+                    demographic_group="Orta_Dogulu",
                     image_b64=b64,
-                    notes="Kritik tesis giriş bölgesi (Main_Entrance_ROI) aranan şahıs profili",
+                    notes="Kritik tesis giriş bölgesi (Ana_Giris_Bolgesi) aranan şahıs profili",
                 )
 
     @staticmethod
@@ -149,11 +158,11 @@ class CloudPipelineEngine:
     def process_edge_event(
         self, payload: Dict[str, Any], crop_bgr: Optional[np.ndarray] = None
     ) -> Dict[str, Any]:
-        """Process a KVKK-minimized suspicious behavior event from the Edge Layer."""
+        """Uç katmanından gelen KVKK uyumlu şüpheli olayını işler, risk yüzdesini hesaplar ve alarm üretir."""
         if crop_bgr is None:
             crop_bgr = self.decode_b64_image(payload.get("cropped_image_b64", ""))
 
-        aligned_face, face_bbox, face_conf = self.recognizer.detect_and_align_face(
+        aligned_face, _face_bbox, face_conf = self.recognizer.detect_and_align_face(
             crop_bgr
         )
         embedding = self.recognizer.extract_embedding(
@@ -174,22 +183,38 @@ class CloudPipelineEngine:
 
         dwell_val = round(float(payload.get("dwell_time", 0.0)), 1)
         eff_val = round(float(payload.get("efficiency", 0.0)), 3)
-        roi_val = payload.get("roi_name", "Main_Entrance_ROI")
-        pose_val = payload.get("pose_action", "STANDING (BEKLEME)")
+        roi_val = payload.get("roi_name", "Ana_Giris_Bolgesi")
+        pose_val = payload.get("pose_action", "BEKLEME")
+        cam_id = payload.get("camera_id", "KAM-01-GİRİŞ")
+        track_id = int(payload.get("track_id", 0))
         is_hit = search_res["is_watchlist_hit"]
         bm = search_res["best_match"]
 
-        # 5. Anti-Spoofing / Liveness Check
         liveness_info = self.smart_engine.evaluate_face_liveness(aligned_face)
-
-        # 6. Visual Clothing Attributes & Gemini 3.8 Flash VLM Security Report
         clothing_info = self.smart_engine.extract_clothing_attributes(crop_bgr)
+
+        # Çok faktörlü Kişi Risk Yüzdesi (%0 - %100) hesabı
+        risk_info = self.risk_scorer.compute_person_risk(
+            behavior_status="ŞÜPHELİ OYALANMA",
+            roi_name=roi_val,
+            dwell_time=dwell_val,
+            time_threshold=float(self.edge_telemetry.get("time_threshold", 5.0)),
+            efficiency=eff_val,
+            pose_action=pose_val,
+            watchlist_hit=is_hit,
+            watchlist_risk_level=(bm or {}).get("risk_level"),
+            liveness_is_live=liveness_info["is_live"],
+            abandoned_bag_owner=("Terk_Edilmis" in str(roi_val) or "TERK EDİLMİŞ" in str(pose_val)),
+        )
+
         meta_for_vlm = {
-            "camera_id": payload.get("camera_id", "CAM-01-GIRIS"),
+            "camera_id": cam_id,
             "roi_name": roi_val,
             "dwell_time": dwell_val,
             "efficiency": eff_val,
             "pose_action": pose_val,
+            "risk_percent": risk_info["risk_percent"],
+            "risk_tier": risk_info["risk_tier"],
             "watchlist_hit": is_hit,
             "best_match": bm,
         }
@@ -198,10 +223,10 @@ class CloudPipelineEngine:
         )
 
         event_record = {
-            "event_id": f"EVT-{int(time.time() * 1000) % 1000000:06d}",
+            "event_id": f"OLY-{int(time.time() * 1000) % 1000000:06d}",
             "timestamp_str": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "camera_id": payload.get("camera_id", "CAM-01-GIRIS"),
-            "track_id": int(payload.get("track_id", 0)),
+            "camera_id": cam_id,
+            "track_id": track_id,
             "roi_name": roi_val,
             "dwell_time": dwell_val,
             "efficiency": eff_val,
@@ -215,6 +240,9 @@ class CloudPipelineEngine:
             "upper_clothing": clothing_info["upper_color"],
             "lower_clothing": clothing_info["lower_color"],
             "pose_action": pose_val,
+            "risk_percent": risk_info["risk_percent"],
+            "risk_tier": risk_info["risk_tier"],
+            "risk_breakdown": risk_info["breakdown"],
             "watchlist_hit": is_hit,
             "best_match": bm,
             "top_candidates": search_res["top_candidates"],
@@ -230,12 +258,36 @@ class CloudPipelineEngine:
             if len(self.events_log) > 50:
                 self.events_log = self.events_log[:50]
 
+        # Çok seviyeli Alarm ve İhbar Sistemini tetikle
+        if is_hit and bm:
+            alarm_title = f"Milvus İzleme Listesi Eşleşmesi: {bm['name']}"
+            alarm_cat = f"MİLVUS EŞLEŞMESİ ({bm.get('risk_level', 'YÜKSEK')})"
+        elif "Terk_Edilmis" in str(roi_val) or "TERK EDİLMİŞ" in str(pose_val):
+            alarm_title = f"Terk Edilmiş Şüpheli Nesne (İz #{track_id})"
+            alarm_cat = "TERK EDİLMİŞ NESNE"
+        else:
+            alarm_title = f"{roi_val} Bölgesinde Şüpheli Oyalanma (İz #{track_id})"
+            alarm_cat = "ŞÜPHELİ OYALANMA"
+
+        self.alarm_manager.evaluate_and_trigger(
+            title=alarm_title,
+            description=behavior_summary,
+            category=alarm_cat,
+            risk_percent=risk_info["risk_percent"],
+            camera_id=cam_id,
+            track_id=track_id,
+            roi_name=roi_val,
+            snapshot_b64=aligned_b64,
+            matched_name=(bm or {}).get("name"),
+            risk_breakdown=risk_info["breakdown"],
+        )
+
         return event_record
 
 
 app = FastAPI(
-    title="TÜBİTAK 2209-A Hibrit Şüpheli Davranış ve Adil Yüz Tanıma Bulut Servisi",
-    version="2.1.0",
+    title="TÜBİTAK 2209-A Hibrit Şüpheli Davranış, Risk Skorlama ve Adil Yüz Tanıma Bulut Servisi",
+    version="3.0.0",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -255,6 +307,8 @@ def get_health():
         "project": cloud_engine.config.get("project", {}),
         "milvus": cloud_engine.vector_db.get_status(),
         "edge_telemetry": cloud_engine.edge_telemetry,
+        "active_person_risks": cloud_engine.active_person_risks,
+        "alarm_summary": cloud_engine.alarm_manager.get_summary(),
         "events_count": len(cloud_engine.events_log),
         "kvkk_privacy_by_design": True,
         "smart_features": {
@@ -271,12 +325,13 @@ def get_health():
 
 @app.post("/api/v1/controls")
 def update_runtime_controls(update: RuntimeControlUpdate):
-    """Allow interactive users in the Web Dashboard to change source, thresholds, or smart AI features."""
+    """Web panelinden video kaynağını, bekleme eşiğini ve akıllı YZ modüllerini anlık yönetir."""
     se = cloud_engine.smart_engine
     if update.source is not None:
         cloud_engine.runtime_controls["requested_source"] = update.source
     if update.time_threshold is not None:
         cloud_engine.runtime_controls["time_threshold"] = float(update.time_threshold)
+        cloud_engine.edge_telemetry["time_threshold"] = float(update.time_threshold)
     if update.efficiency_threshold is not None:
         cloud_engine.runtime_controls["efficiency_threshold"] = float(
             update.efficiency_threshold
@@ -298,7 +353,7 @@ def update_runtime_controls(update: RuntimeControlUpdate):
     if update.simulate_abandoned_bag:
         se.toggle_simulated_abandoned_bag()
     return {
-        "status": "updated",
+        "status": "güncellendi",
         "controls": cloud_engine.runtime_controls,
         "smart_features": {
             "kvkk_dynamic_blur": se.kvkk_dynamic_blur,
@@ -311,9 +366,97 @@ def update_runtime_controls(update: RuntimeControlUpdate):
     }
 
 
+@app.get("/api/v1/alarms")
+def list_alarms():
+    """Tüm alarmları ve özet istatistikleri döndürür."""
+    return {
+        "summary": cloud_engine.alarm_manager.get_summary(),
+        "alarms": cloud_engine.alarm_manager.list_alarms(limit=40),
+    }
+
+
+@app.post("/api/v1/alarms/test")
+def trigger_test_alarm():
+    """Alarm ve siren sistemini anında doğrulamak için test alarmı oluşturur."""
+    alm = cloud_engine.alarm_manager.evaluate_and_trigger(
+        title="Acil Güvenlik Alarmı Testi (Operatör Tetiklemesi)",
+        description="Çok seviyeli alarm, siren ve ihbar hattı operatör tarafından test edildi. Risk: %88 [KRİTİK].",
+        category="KRİTİK TEST ALARMI",
+        risk_percent=88.0,
+        camera_id=cloud_engine.edge_telemetry.get("camera_id", "KAM-01-GİRİŞ"),
+        track_id=0,
+        roi_name="Hassas_Bolge",
+        risk_breakdown={
+            "roi_kalma_puani": 22.0,
+            "yorunge_verimsizlik_puani": 18.0,
+            "poz_eylem_puani": 18.0,
+            "biyometrik_milvus_puani": 30.0,
+            "sahtecilik_puani": 0.0,
+        },
+        force=True,
+    )
+    return {"alarm": alm, "summary": cloud_engine.alarm_manager.get_summary()}
+
+
+@app.post("/api/v1/alarms/{alarm_id}/acknowledge")
+def acknowledge_alarm(alarm_id: str):
+    alm = cloud_engine.alarm_manager.acknowledge_alarm(alarm_id)
+    if not alm:
+        raise HTTPException(status_code=404, detail="Alarm bulunamadı")
+    return {"alarm": alm, "summary": cloud_engine.alarm_manager.get_summary()}
+
+
+@app.post("/api/v1/alarms/{alarm_id}/resolve")
+def resolve_alarm(alarm_id: str):
+    alm = cloud_engine.alarm_manager.resolve_alarm(alarm_id)
+    if not alm:
+        raise HTTPException(status_code=404, detail="Alarm bulunamadı")
+    return {"alarm": alm, "summary": cloud_engine.alarm_manager.get_summary()}
+
+
+@app.post("/api/v1/alarms/resolve-all")
+def resolve_all_alarms():
+    resolved_count = cloud_engine.alarm_manager.resolve_all_active()
+    return {
+        "resolved_count": resolved_count,
+        "summary": cloud_engine.alarm_manager.get_summary(),
+    }
+
+
+@app.post("/api/v1/alarms/clear")
+def clear_alarm_history():
+    cloud_engine.alarm_manager.clear_history()
+    return {"status": "temizlendi", "summary": cloud_engine.alarm_manager.get_summary()}
+
+
+@app.post("/api/v1/alarms/mute")
+def toggle_alarm_mute():
+    cloud_engine.alarm_manager.siren_muted = not cloud_engine.alarm_manager.siren_muted
+    return {
+        "siren_susturuldu": cloud_engine.alarm_manager.siren_muted,
+        "summary": cloud_engine.alarm_manager.get_summary(),
+    }
+
+
+@app.get("/api/v1/alarms/export")
+def export_alarms_json():
+    return JSONResponse(
+        content={
+            "proje": "TÜBİTAK 2209-A Akıllı Güvenlik ve Alarm Raporu",
+            "olusturma_zamani": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "ozet": cloud_engine.alarm_manager.get_summary(),
+            "alarmlar": [
+                {k: v for k, v in a.items() if k != "goruntu_b64"}
+                for a in cloud_engine.alarm_manager.list_alarms(limit=100)
+            ],
+        },
+        headers={"Content-Disposition": "attachment; filename=tubitak_alarm_raporu.json"},
+    )
+
+
 @app.get("/api/v1/events/search")
 def search_events(q: str = ""):
-    """Natural language forensic search across security events."""
+    """Kayıtlı güvenlik olayları üzerinde doğal dilde adli arama yapar."""
     filtered = cloud_engine.smart_engine.search_events_by_query(
         cloud_engine.events_log, q
     )
@@ -322,7 +465,7 @@ def search_events(q: str = ""):
 
 @app.post("/api/v1/notify/telegram")
 def notify_telegram():
-    """Send the most recent security alert to Telegram Bot."""
+    """En güncel güvenlik uyarısını Telegram botuna gönderir."""
     if not cloud_engine.events_log:
         return {"sent": False, "message": "Henüz gönderilecek bir uyarı kaydı yok."}
     return cloud_engine.smart_engine.send_telegram_notification(
@@ -335,14 +478,14 @@ async def test_single_image(
     enroll_name: str = Form(""),
     file: UploadFile = File(...),
 ):
-    """Allow any user to upload a photo or webcam capture to test ArcFace 512-D + Milvus matching."""
+    """Yüklenen tekil fotoğraf üzerinde ArcFace 512-D, canlılık, risk puanı ve Milvus araması yapar."""
     content = await file.read()
     arr = np.frombuffer(content, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400, detail="Geçersiz görüntü dosyası")
 
-    aligned_face, face_bbox, face_conf = cloud_engine.recognizer.detect_and_align_face(
+    aligned_face, _face_bbox, face_conf = cloud_engine.recognizer.detect_and_align_face(
         img
     )
     emb = cloud_engine.recognizer.extract_embedding(aligned_face, already_aligned=True)
@@ -354,7 +497,7 @@ async def test_single_image(
         enrolled_record = cloud_engine.vector_db.enroll_identity(
             name=enroll_name.strip(),
             embedding=emb,
-            risk_level="HIGH",
+            risk_level="YÜKSEK",
             demographic_group=group,
             image_b64=b64_face,
             notes="Web arayüzünden anlık test ve kayıt",
@@ -364,12 +507,11 @@ async def test_single_image(
         emb, top_k=3, threshold=cloud_engine.recognizer.match_threshold
     )
 
-    # Also log as a test event so it appears in the Cloud Alerts feed
     event_rec = cloud_engine.process_edge_event(
         {
-            "camera_id": "WEB-TEST-UPLOAD",
+            "camera_id": "WEB-TEST-YÜKLEME",
             "track_id": 999,
-            "roi_name": "Interactive_User_Test",
+            "roi_name": "Etkilesimli_Kullanici_Testi",
             "dwell_time": 185.0,
             "efficiency": 0.12,
             "kvkk_data_minimized": True,
@@ -391,8 +533,7 @@ async def test_single_image(
 
 @app.post("/api/v1/events/analyze")
 def analyze_edge_event(payload: EdgeEventPayload):
-    event = cloud_engine.process_edge_event(payload.model_dump())
-    return event
+    return cloud_engine.process_edge_event(payload.model_dump())
 
 
 @app.get("/api/v1/events")
@@ -411,8 +552,8 @@ def get_watchlist():
 @app.post("/api/v1/watchlist/enroll")
 async def enroll_watchlist(
     name: str = Form(...),
-    risk_level: str = Form("HIGH"),
-    demographic_group: str = Form("Middle_Eastern"),
+    risk_level: str = Form("YÜKSEK"),
+    demographic_group: str = Form("Orta_Dogulu"),
     notes: str = Form(""),
     file: UploadFile = File(...),
 ):
@@ -426,7 +567,7 @@ async def enroll_watchlist(
     emb = cloud_engine.recognizer.extract_embedding(aligned, already_aligned=True)
     b64 = KVKKPrivacyBridge.encode_image_b64(aligned)
 
-    res = cloud_engine.vector_db.enroll_identity(
+    return cloud_engine.vector_db.enroll_identity(
         name=name,
         embedding=emb,
         risk_level=risk_level,
@@ -434,7 +575,6 @@ async def enroll_watchlist(
         image_b64=b64,
         notes=notes,
     )
-    return res
 
 
 @app.delete("/api/v1/watchlist/{person_id}")
@@ -458,7 +598,7 @@ def run_tubitak_evaluation():
 
 @app.get("/api/v1/stream/video")
 def stream_video():
-    """MJPEG live stream of the Edge Analyzer for the Web Dashboard."""
+    """Web Gösterge Paneli için Uç Katmanı canlı MJPEG video akışı."""
 
     def generate():
         while True:
@@ -468,8 +608,8 @@ def stream_video():
                 canvas[:] = (24, 28, 36)
                 cv2.putText(
                     canvas,
-                    "TUBITAK 2209-A Uc Katmani (Edge Layer) Akisi Bekleniyor...",
-                    (70, 230),
+                    "TUBITAK 2209-A Uc Katmani Akisi Bekleniyor...",
+                    (95, 230),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.75,
                     (100, 220, 255),
@@ -496,4 +636,4 @@ def serve_dashboard():
     if os.path.exists(dashboard_path):
         with open(dashboard_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse("<h1>TÜBİTAK 2209-A Cloud Dashboard</h1>")
+    return HTMLResponse("<h1>TÜBİTAK 2209-A Akıllı Güvenlik Paneli</h1>")

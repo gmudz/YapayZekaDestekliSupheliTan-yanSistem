@@ -1,14 +1,14 @@
-"""Module for person detection using YOLOv5 (Edge Layer — TÜBİTAK 2209-A).
+"""YOLOv5 Kişi ve Çanta Tespit Modülü (Uç Katmanı — TÜBİTAK 2209-A).
 
-Provides the PersonDetector class that uses YOLOv5 (yolov5m.pt) for real-time
-person detection in video streams with accurate letterbox coordinate rescaling,
-automatic CUDA/CPU device selection, and optional FP16/TensorRT acceleration.
+YOLOv5m modelini kullanarak video karelerinde gerçek zamanlı kişi ve terk edilmeye
+elverişli nesne (sırt çantası, el çantası, valiz) tespiti yapar. Letterbox
+koordinat geri ölçekleme, otomatik CUDA/CPU seçimi ve yakın mesafe web kamerası
+yüzden-gövdeye destek mekanizması içerir.
 """
 
 import os
 import cv2
 import torch
-import torchvision
 import numpy as np
 from typing import List, Tuple, Optional
 
@@ -18,7 +18,7 @@ def box_area(boxes: torch.Tensor) -> torch.Tensor:
 
 
 def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-    """Calculate intersection over union (IoU) between two sets of boxes."""
+    """İki kutu kümesi arasındaki Kesişim / Birleşim (IoU) oranını hesaplar."""
     area1 = box_area(boxes1)
     area2 = box_area(boxes2)
     lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])
@@ -34,7 +34,7 @@ def scale_boxes_from_letterbox(
     ratio: Tuple[float, float],
     pad: Tuple[float, float],
 ) -> np.ndarray:
-    """Rescale bounding boxes from letterboxed image space back to original frame coordinates."""
+    """Sınırlayıcı kutuları letterbox uzayından orijinal video karesi boyutuna ölçekler."""
     if len(boxes) == 0:
         return boxes
     scaled = boxes.copy().astype(np.float32)
@@ -51,17 +51,7 @@ def scale_boxes_from_letterbox(
 
 
 class PersonDetector:
-    """Real-time person detector using YOLOv5 (Edge Layer).
-
-    Args:
-        model_name: Path to YOLOv5 weights file (default: 'yolov5m.pt')
-        confidence_threshold: Minimum confidence threshold for person detections
-        iou_threshold: IoU threshold for Non-Maximum Suppression (NMS)
-        target_classes: Target classes to detect (default: ['person'])
-        device: 'auto', 'cuda:0', or 'cpu'
-        half_precision: Whether to use FP16 half precision on GPU
-        input_size: Inference resolution (default: 416)
-    """
+    """YOLOv5 tabanlı gerçek zamanlı kişi ve nesne tespit sınıfı (Uç Katmanı)."""
 
     def __init__(
         self,
@@ -71,7 +61,7 @@ class PersonDetector:
         target_classes: Optional[List[str]] = None,
         device: str = "auto",
         half_precision: bool = False,
-        input_size: int = 416,
+        input_size: int = 320,
     ):
         self.confidence_threshold = float(confidence_threshold)
         self.iou_threshold = float(iou_threshold)
@@ -89,7 +79,6 @@ class PersonDetector:
         self.device_str = resolved_device
         self.half_precision = bool(half_precision and "cuda" in resolved_device)
 
-        # Resolve model path relative to project root if needed
         if not os.path.exists(model_name):
             candidate = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -106,8 +95,6 @@ class PersonDetector:
             from yolov5.utils.augmentations import letterbox
             from yolov5.utils.torch_utils import select_device
 
-            # Modern PyTorch (>=2.6) sets weights_only=True by default in torch.load,
-            # while YOLOv5 checkpoints contain DetectionModel classes.
             _orig_torch_load = torch.load
 
             def _compat_load(*args, **kwargs):
@@ -128,7 +115,7 @@ class PersonDetector:
             self.model.conf = self.confidence_threshold
             self.model.iou = self.iou_threshold
             self.model.max_det = 60
-            # COCO classes: 0=person, 24=backpack, 26=handbag, 28=suitcase
+            # COCO sınıfları: 0=kişi, 24=sırt çantası, 26=el çantası, 28=valiz
             self.model.classes = [0, 24, 26, 28]
             self.model.amp = False
 
@@ -144,12 +131,12 @@ class PersonDetector:
             cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             self._face_cascade = cv2.CascadeClassifier(cascade_path)
         except Exception as e:
-            raise RuntimeError(f"Error initializing YOLOv5 PersonDetector: {e}") from e
+            raise RuntimeError(f"YOLOv5 PersonDetector başlatma hatası: {e}") from e
 
     def _detect_closeup_webcam_person(
         self, frame: np.ndarray
     ) -> List[Tuple[int, int, int, int, float]]:
-        """Fallback for close-up laptop webcam shots where mainly the user's face/head is visible."""
+        """Dizüstü web kamerasında yalnızca baş/omuz göründüğünde kişi kutusu çıkarır."""
         orig_h, orig_w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         small = cv2.resize(gray, (0, 0), fx=0.5, fy=0.5)
@@ -159,7 +146,6 @@ class PersonDetector:
         results: List[Tuple[int, int, int, int, float]] = []
         for fx, fy, fw, fh in faces:
             fx, fy, fw, fh = int(fx * 2), int(fy * 2), int(fw * 2), int(fh * 2)
-            # Expand face box to upper-body person box
             x1 = max(0, int(fx - fw * 0.6))
             y1 = max(0, int(fy - fh * 0.25))
             x2 = min(orig_w - 1, int(fx + fw * 1.6))
@@ -170,9 +156,10 @@ class PersonDetector:
     def detect_with_conf(
         self, frame: np.ndarray
     ) -> List[Tuple[int, int, int, int, float]]:
-        """Detect people in a BGR frame and return [(xmin, ymin, xmax, ymax, confidence)]."""
+        """BGR karede kişileri ve çantaları tespit eder, [(xmin, ymin, xmax, ymax, güven)] döndürür."""
         if frame is None or frame.size == 0:
             self.last_detections_with_conf = []
+            self.last_bag_detections = []
             return []
 
         try:
@@ -210,7 +197,7 @@ class PersonDetector:
                 boxes[:, :4], (orig_h, orig_w), ratio, (dw, dh)
             )
 
-            bag_class_names = {24: "Backpack", 26: "Handbag", 28: "Suitcase"}
+            bag_class_names = {24: "Sırt Çantası", 26: "El Çantası", 28: "Valiz"}
             for box in boxes:
                 if len(box) >= 6:
                     xmin, ymin, xmax, ymax, conf, cls = box[:6]
@@ -242,12 +229,13 @@ class PersonDetector:
             self.last_bag_detections = bag_results
             return results
         except Exception as e:
-            print(f"[PersonDetector] Inference warning: {e}")
+            print(f"[KişiTespiti] Çıkarım uyarısı: {e}")
             self.last_detections_with_conf = []
+            self.last_bag_detections = []
             return []
 
     def detect(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
-        """Detect people and return [(xmin, ymin, xmax, ymax)] for backward compatibility."""
+        """Geriye dönük uyumluluk için [(xmin, ymin, xmax, ymax)] döndürür."""
         dets = self.detect_with_conf(frame)
         return [(x1, y1, x2, y2) for (x1, y1, x2, y2, _conf) in dets]
 

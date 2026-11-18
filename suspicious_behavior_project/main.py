@@ -1,25 +1,24 @@
-"""Main application for TÜBİTAK 2209-A Hybrid Edge/Cloud Suspicious Behavior & Fair Face Recognition System.
+"""TÜBİTAK 2209-A Hibrit Uç/Bulut Şüpheli Davranış, Risk Skorlama ve Adil Yüz Tanıma Ana Uygulaması.
 
-Integrates:
-1. Edge Layer:
-   - YOLOv5m Real-Time Person Detection (modules/person_detector.py)
-   - DeepSORT Tracking with 8-D Kalman Filter & 512-D Re-ID Appearance Matching (modules/object_tracker.py)
-   - Dual-Criterion Loitering Analysis: ROI Dwell Time + Trajectory Efficiency (modules/behavior_analyzer.py)
-   - KVKK Privacy-by-Design Data Minimization Bridge (modules/privacy_bridge.py)
-2. Cloud Layer:
-   - FastAPI Cloud Service & Live Web Dashboard on port 8000 (cloud/server.py)
-   - 512-D ArcFace Face Embedding with FairFace Demographic Bias Mitigation (modules/face_recognizer.py)
-   - Milvus Vector Database Watchlist Search via Cosine Similarity (modules/vector_db.py)
+Bütünleştirdiği bileşenler:
+1. Uç Katmanı:
+   - YOLOv5m Gerçek Zamanlı Kişi ve Çanta Tespiti (modules/person_detector.py)
+   - DeepSORT Çoklu Nesne Takibi: 8-D Kalman Filtresi + 512-D Re-ID (modules/object_tracker.py)
+   - Çift Kriterli Amaçsız Bekleme Analizi (modules/behavior_analyzer.py)
+   - 6 Akıllı Yapay Zeka Modülü: KVKK Maskeleme, Isı Haritası, 3sn Tahmin, İskelet Pozu, Terk Edilmiş Nesne
+   - Kişi Risk Yüzdesi Hesaplama Motoru %0-%100 (modules/risk_scorer.py)
+   - KVKK 6698 Veri Minimizasyonu Köprüsü (modules/privacy_bridge.py)
+2. Bulut Katmanı:
+   - FastAPI Bulut Servisi, Alarm Yönetim Merkezi ve Google Stitch Web Paneli (:8000)
+   - FairFace Kalibrasyonlu 512-D ArcFace Yüz Tanıma (modules/face_recognizer.py)
+   - Milvus Standalone Vektör Veritabanı Kosinüs Benzerliği Araması (modules/vector_db.py)
 """
 
 import os
-import sys
 import time
-import base64
 import argparse
 import threading
 import cv2
-import yaml
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 
@@ -28,21 +27,20 @@ from modules.object_tracker import ObjectTracker
 from modules.behavior_analyzer import BehaviorAnalyzer
 from modules.privacy_bridge import KVKKPrivacyBridge
 from modules.fairness_evaluator import TubitakEvaluationSuite
-from utils.helpers import load_config, load_camera_source, draw_alert
+from modules.risk_scorer import PersonRiskScorer
+from utils.helpers import load_config, load_camera_source, draw_alert, ascii_tr
 
 
 def convert_detections(
     detections: List[Tuple[int, int, int, int, float]]
 ) -> Tuple[List[List[float]], List[float]]:
-    """Convert detections from (xmin, ymin, xmax, ymax, conf) to ([x, y, w, h], conf)."""
+    """Tespitleri (xmin, ymin, xmax, ymax, güven) biçiminden ([x, y, w, h], güven) biçimine çevirir."""
     xywh_detections = []
     confidences = []
     for det in detections:
         xmin, ymin, xmax, ymax = det[:4]
         conf = det[4] if len(det) >= 5 else 0.90
-        width = xmax - xmin
-        height = ymax - ymin
-        xywh_detections.append([xmin, ymin, width, height])
+        xywh_detections.append([xmin, ymin, xmax - xmin, ymax - ymin])
         confidences.append(conf)
     return xywh_detections, confidences
 
@@ -52,7 +50,7 @@ def draw_detections(
     tracked_objects: List[Dict[str, Any]],
     watchlist_matches: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> None:
-    """Draw tracked persons, trajectory trails, ROI dwell telemetry, and Cloud Watchlist hits."""
+    """Takip edilen kişileri, yörünge izlerini, anlık risk yüzdesini (%0-%100) ve Milvus eşleşmelerini çizer."""
     watchlist_matches = watchlist_matches or {}
 
     for obj in tracked_objects:
@@ -61,13 +59,9 @@ def draw_detections(
         status = obj.get("behavior_status", "NORMAL")
         dwell = obj.get("dwell_time", 0.0)
         eff = obj.get("efficiency", 1.0)
-
-        if status == "LOITERING":
-            color = (0, 0, 255)  # Red for confirmed suspicious loitering
-        elif status == "IN_ROI":
-            color = (0, 180, 255)  # Amber for monitored inside ROI
-        else:
-            color = (0, 220, 90)  # Green for normal transit
+        risk_pct = float(obj.get("risk_percent", 0.0))
+        risk_tier = obj.get("risk_tier", "DÜŞÜK")
+        color = PersonRiskScorer.TIER_COLORS_BGR.get(risk_tier, (74, 222, 128))
 
         x1, y1, x2, y2 = [int(v) for v in bbox[:4]]
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
@@ -76,7 +70,6 @@ def draw_detections(
         center_y = (y1 + y2) // 2
         cv2.circle(frame, (center_x, center_y), 4, color, -1)
 
-        # Draw trajectory trail
         history = obj.get("history", [])
         if len(history) > 1:
             pts = history[-40:]
@@ -84,40 +77,46 @@ def draw_detections(
                 if pts[i] is not None and pts[i - 1] is not None:
                     cv2.line(frame, pts[i - 1], pts[i], color, 2)
 
-        # Primary label: Track ID + Status
-        header = f"ID:{track_id} [{status}]"
+        # Üst başlık: İz Kimliği + Risk Yüzdesi + Seviye
+        header = ascii_tr(f"Iz:{track_id} | Risk:%{risk_pct:.0f} [{risk_tier}]")
         cv2.putText(
             frame,
             header,
-            (x1, max(20, y1 - 28)),
+            (x1, max(20, y1 - 30)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.62,
+            0.58,
             color,
             2,
         )
 
-        # Secondary telemetry: Dwell time & Trajectory efficiency
-        telemetry = f"Sure:{dwell:.1f}s | Verim:{eff:.2f}"
+        # Mini Risk Çubuğu
+        bar_w = max(70, min(180, x2 - x1))
+        bar_y1 = max(24, y1 - 24)
+        cv2.rectangle(frame, (x1, bar_y1), (x1 + bar_w, bar_y1 + 6), (30, 35, 48), -1)
+        fill_w = int(bar_w * (risk_pct / 100.0))
+        if fill_w > 0:
+            cv2.rectangle(frame, (x1, bar_y1), (x1 + fill_w, bar_y1 + 6), color, -1)
+
+        telemetry = ascii_tr(f"{status} | Sure:{dwell:.1f}s | Verim:{eff:.2f}")
         cv2.putText(
             frame,
             telemetry,
-            (x1, max(38, y1 - 8)),
+            (x1, max(40, y1 - 5)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.50,
+            0.47,
             (235, 245, 255),
             1,
         )
 
-        # If Cloud Layer matched this Track ID in the Milvus Watchlist, display badge
         if track_id in watchlist_matches:
             match_info = watchlist_matches[track_id]
-            match_text = (
-                f"MILVUS MATCH: {match_info['name']} (Cos:{match_info['cosine_similarity']:.2f})"
+            match_text = ascii_tr(
+                f"MILVUS ESLESME: {match_info['name']} (Benzerlik:%{match_info['cosine_similarity']*100:.1f})"
             )
             cv2.rectangle(
                 frame,
                 (x1, min(frame.shape[0] - 28, y2 + 4)),
-                (min(frame.shape[1] - 5, x1 + 380), min(frame.shape[0] - 2, y2 + 28)),
+                (min(frame.shape[1] - 5, x1 + 420), min(frame.shape[0] - 2, y2 + 28)),
                 (0, 0, 190),
                 -1,
             )
@@ -133,12 +132,12 @@ def draw_detections(
 
 
 def start_cloud_server_in_background(host: str = "0.0.0.0", port: int = 8000):
-    """Launch the FastAPI Cloud Layer & Web Dashboard in a daemon thread if not already bound."""
+    """FastAPI Bulut Katmanı ve Web Panelini arka plan iş parçacığında başlatır."""
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if s.connect_ex(("127.0.0.1", port)) == 0:
-            print(f"[Cloud Layer] FastAPI Web Dashboard already running at http://127.0.0.1:{port}")
+            print(f"[Bulut Katmanı] FastAPI Web Paneli zaten çalışıyor: http://127.0.0.1:{port}")
             from cloud.server import cloud_engine
 
             return cloud_engine
@@ -152,12 +151,12 @@ def start_cloud_server_in_background(host: str = "0.0.0.0", port: int = 8000):
     t = threading.Thread(target=_run, daemon=True)
     t.start()
     time.sleep(1.0)
-    print(f"[Cloud Layer] FastAPI & Web Dashboard started at http://127.0.0.1:{port}")
+    print(f"[Bulut Katmanı] FastAPI ve Web Paneli başlatıldı: http://127.0.0.1:{port}")
     return cloud_engine
 
 
 def print_evaluation_report(report: Dict[str, Any]) -> None:
-    """Print formatted TÜBİTAK 2209-A Hedef 1-4 benchmark report to console."""
+    """TÜBİTAK 2209-A Hedef 1-4 doğrulama raporunu konsola yazdırır."""
     print("\n" + "=" * 86)
     print(" TÜBİTAK 2209-A UÇTAN UCA (E2E) DOĞRULAMA VE ADİLLİK DENETİMİ RAPORU")
     print("=" * 86)
@@ -174,7 +173,7 @@ def print_evaluation_report(report: Dict[str, Any]) -> None:
     )
     print(
         f" [HEDEF 2] {h2['target_name']}\n"
-        f"   -> Precision: {h2['precision']} | Recall: {h2['recall']} | "
+        f"   -> Kesinlik: {h2['precision']} | Duyarlılık: {h2['recall']} | "
         f"F1-Skoru: {h2['f1_score']} (Hedef >= 0.80) | "
         f"Durum: {'BAŞARILI ✅' if h2['passed'] else 'BAŞARISIZ ❌'}"
     )
@@ -195,7 +194,7 @@ def print_evaluation_report(report: Dict[str, Any]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="TÜBİTAK 2209-A Hibrit Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi"
+        description="TÜBİTAK 2209-A Hibrit Şüpheli Davranış, Risk Skorlama ve Adil Yüz Tanıma Sistemi"
     )
     parser.add_argument(
         "--config", type=str, default="config/config.yaml", help="Yapılandırma dosyası yolu"
@@ -211,7 +210,7 @@ def main():
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="OpenCV penceresi açmadan yalnızca Web Gösterge Paneli ve konsol ile çalıştır",
+        help="OpenCV penceresi açmadan yalnızca Web Gösterge Paneli ile çalıştır",
     )
     parser.add_argument(
         "--max-frames",
@@ -236,18 +235,15 @@ def main():
         print_evaluation_report(report)
         return
 
-    # Start Cloud Layer FastAPI + Web Dashboard on port 8000
     cloud_cfg = config.get("cloud", {})
     cloud_engine = start_cloud_server_in_background(
         host=cloud_cfg.get("host", "0.0.0.0"),
         port=int(cloud_cfg.get("port", 8000)),
     )
 
-    # Print initial TÜBİTAK benchmark verification summary
     if cloud_engine.latest_benchmark:
         print_evaluation_report(cloud_engine.latest_benchmark)
 
-    # Initialize Edge Layer components
     cap = load_camera_source(config)
 
     detector = PersonDetector(
@@ -256,7 +252,7 @@ def main():
         iou_threshold=config["model"].get("iou_threshold", 0.45),
         device=config["model"].get("device", "auto"),
         half_precision=config["model"].get("half_precision", False),
-        input_size=config["model"].get("input_size", 416),
+        input_size=config["model"].get("input_size", 320),
     )
 
     tracker = ObjectTracker(
@@ -275,7 +271,7 @@ def main():
 
     privacy_bridge = KVKKPrivacyBridge(
         cloud_api_url=cloud_cfg.get("api_url", "http://127.0.0.1:8000"),
-        camera_id=config["camera"].get("camera_id", "CAM-01-GIRIS"),
+        camera_id=config["camera"].get("camera_id", "KAM-01-GİRİŞ"),
         enabled=True,
         local_cloud_fallback=cloud_engine,
     )
@@ -283,7 +279,7 @@ def main():
     can_show_gui = (not args.headless) and bool(
         os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
     )
-    window_name = "TUBITAK 2209-A | Supheli Davranis ve Adil Yuz Tanima Sistemi"
+    window_name = "TUBITAK 2209-A | Akilli Guvenlik, Risk ve Adil Yuz Tanima Sistemi"
     if can_show_gui:
         try:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -292,10 +288,10 @@ def main():
             can_show_gui = False
 
     print(
-        f"[Edge Layer] Pipeline started (YOLOv5m on {detector.device_str} + DeepSORT + "
-        f"Loitering Threshold={behavior_analyzer.time_threshold}s + KVKK Bridge)"
+        f"[Uç Katmanı] İşlem hattı başlatıldı (YOLOv5m [{detector.device_str}] + DeepSORT + "
+        f"Risk Motoru + Alarm Sistemi + Bekleme Eşiği={behavior_analyzer.time_threshold}sn)"
     )
-    print(f"[Web Dashboard] Open http://127.0.0.1:{cloud_cfg.get('port', 8000)} in browser")
+    print(f"[Web Paneli] Tarayıcıdan erişin: http://127.0.0.1:{cloud_cfg.get('port', 8000)}")
 
     fps = 25.0
     frame_idx = 0
@@ -304,11 +300,11 @@ def main():
     sim_clock = time.time()
     live_webcam_enrolled = False
 
-    # Asynchronous background detector state for smooth 20-30 FPS live webcam rendering
     det_lock = threading.Lock()
     shared_det_state: Dict[str, Any] = {
         "frame_to_process": None,
         "latest_dets": [],
+        "latest_bags": [],
         "running": True,
     }
 
@@ -318,8 +314,10 @@ def main():
             if frm is not None:
                 shared_det_state["frame_to_process"] = None
                 res = detector.detect_with_conf(frm)
+                bags = list(getattr(detector, "last_bag_detections", []))
                 with det_lock:
                     shared_det_state["latest_dets"] = res
+                    shared_det_state["latest_bags"] = bags
             else:
                 time.sleep(0.01)
 
@@ -330,7 +328,6 @@ def main():
         while True:
             t_frame_start = time.perf_counter()
 
-            # Check interactive Web Dashboard controls
             ctrl = getattr(cloud_engine, "runtime_controls", {})
             if ctrl.get("requested_source") is not None:
                 req_src = ctrl["requested_source"]
@@ -357,11 +354,10 @@ def main():
 
             ret, frame = cap.read()
             if not ret or frame is None:
-                # Loop video seamlessly for continuous surveillance demonstration
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 ret, frame = cap.read()
                 if not ret or frame is None:
-                    print("Video stream ended.")
+                    print("Video akışı sona erdi.")
                     break
 
             if frame.shape[1] != 1280 or frame.shape[0] != 720:
@@ -371,36 +367,37 @@ def main():
             privacy_bridge.register_frame_processed_on_edge()
 
             is_live_webcam = str(config["camera"].get("source", "0")) in ("0", "/dev/video0")
-
-            # Use real wall-clock seconds on live webcam, or 0.20s/frame simulation clock on demo video
             if is_live_webcam or not demo_mode:
                 sim_clock = time.time()
             else:
                 sim_clock += 0.20
 
-            # 1. Edge Person Detection (YOLOv5m)
+            # 1. Uç Katmanı Kişi ve Çanta Tespiti (YOLOv5m)
             if is_live_webcam and args.max_frames == 0:
-                # Submit frame to background worker and read latest detections without blocking webcam FPS
                 if shared_det_state["frame_to_process"] is None:
                     shared_det_state["frame_to_process"] = frame.copy()
                 with det_lock:
                     dets_with_conf = list(shared_det_state["latest_dets"])
+                    bag_dets = list(shared_det_state["latest_bags"])
                 if frame_idx == 1 and not dets_with_conf:
                     dets_with_conf = detector.detect_with_conf(frame)
+                    bag_dets = list(getattr(detector, "last_bag_detections", []))
                     with det_lock:
                         shared_det_state["latest_dets"] = dets_with_conf
+                        shared_det_state["latest_bags"] = bag_dets
             else:
                 dets_with_conf = detector.detect_with_conf(frame)
+                bag_dets = list(getattr(detector, "last_bag_detections", []))
 
             det_boxes = [(d[0], d[1], d[2], d[3]) for d in dets_with_conf]
             det_confs = [d[4] for d in dets_with_conf]
 
-            # 2. Edge Multi-Object Tracking (DeepSORT: Kalman + Re-ID Appearance)
+            # 2. Uç Katmanı Çoklu Nesne Takibi (DeepSORT)
             tracked_objects = tracker.update(
                 det_boxes, frame=frame, confidences=det_confs
             )
 
-            # Auto-enroll live webcam user into Milvus Watchlist on first clear detection so live match works immediately
+            # Canlı web kamerasında ilk yüz tespitinde otomatik Milvus kaydı
             if is_live_webcam and not live_webcam_enrolled and tracked_objects:
                 try:
                     trk0 = tracked_objects[0]
@@ -409,34 +406,33 @@ def main():
                     emb0 = cloud_engine.recognizer.extract_embedding(aligned0, already_aligned=True)
                     b64_0 = privacy_bridge.encode_image_b64(aligned0)
                     cloud_engine.vector_db.enroll_identity(
-                        person_id="WL-LIVE-CAM",
+                        person_id="WL-CANLI-KAM",
                         name="Canlı Kamera Kullanıcısı (Aktif İzleme)",
                         embedding=emb0,
-                        risk_level="CRITICAL",
-                        demographic_group="Middle_Eastern",
+                        risk_level="KRİTİK",
+                        demographic_group="Orta_Dogulu",
                         image_b64=b64_0,
-                        notes="Canlı laptoptan otomatik izleme listesi kaydı",
+                        notes="Dizüstü bilgisayar kamerasından otomatik izleme listesi kaydı",
                     )
                     live_webcam_enrolled = True
-                    print("[Live Webcam] Canlı kamera yüzü Milvus İzleme Listesine (WL-LIVE-CAM) kaydedildi!")
+                    print("[Canlı Kamera] Yüz profili Milvus İzleme Listesine (WL-CANLI-KAM) kaydedildi.")
                 except Exception as e:
-                    print(f"[Live Webcam] Auto-enroll warning: {e}")
+                    print(f"[Canlı Kamera] Otomatik kayıt uyarısı: {e}")
 
-            # 3. Edge Behavior Analysis (ROI Dwell Time + Trajectory Efficiency)
+            # 3. Uç Katmanı Davranış Analizi
             alerts = behavior_analyzer.update(
                 tracked_objects, current_timestamp=sim_clock
             )
 
-            # Handle instant test trigger button from Web Dashboard
             if ctrl.get("force_trigger_alert") and tracked_objects:
                 ctrl["force_trigger_alert"] = False
                 target_trk = tracked_objects[0]
-                target_trk["behavior_status"] = "LOITERING"
+                target_trk["behavior_status"] = "ŞÜPHELİ OYALANMA"
                 alerts.append(
                     {
-                        "message": f"ALERT: Person ID {target_trk['track_id']} loitering in Main_Entrance_ROI (Manual Test)",
+                        "message": f"UYARI: Kişi ID {target_trk['track_id']} - Ana_Giris_Bolgesi (Manuel Test)",
                         "track_id": target_trk["track_id"],
-                        "roi_name": target_trk.get("roi_name") or "Main_Entrance_ROI",
+                        "roi_name": target_trk.get("roi_name") or "Ana_Giris_Bolgesi",
                         "dwell_time": max(behavior_analyzer.time_threshold + 2.5, target_trk.get("dwell_time", 6.5)),
                         "efficiency": 0.14,
                         "bbox": target_trk["bbox"],
@@ -446,48 +442,120 @@ def main():
                     }
                 )
 
-            # Keep an untouched copy of the frame for Cloud Layer suspect face cropping
+            # Bulut kırpımı için temiz kareyi sakla
             clean_frame_for_cloud = frame.copy()
 
-            # 4. Smart AI Extensions (KVKK Dynamic Face Blur, Pose Skeleton, Heatmap, Future Trajectory, Abandoned Objects)
+            # 4. Akıllı YZ Modülleri ve Kişi Risk Yüzdesi Hesaplaması
             smart_engine = getattr(cloud_engine, "smart_engine", None)
+            bag_alerts: List[Dict[str, Any]] = []
             if smart_engine is not None:
                 smart_engine.apply_dynamic_kvkk_masking(frame, tracked_objects)
-                pre_breach_warnings = smart_engine.update_and_draw_heatmap_and_predictions(
+                smart_engine.update_and_draw_heatmap_and_predictions(
                     frame, tracked_objects, behavior_analyzer.rois
                 )
-                smart_engine.analyze_and_draw_pose_actions(frame, tracked_objects)
+                pose_alerts = smart_engine.analyze_and_draw_pose_actions(frame, tracked_objects)
                 bag_alerts = smart_engine.update_and_draw_abandoned_objects(
                     frame,
-                    getattr(detector, "last_bag_detections", []),
+                    bag_dets,
                     tracked_objects,
                     current_time=sim_clock,
                 )
-                track_pose_map = {t["track_id"]: t.get("pose_action", "STANDING (BEKLEME)") for t in tracked_objects}
-                for a in alerts:
-                    a["pose_action"] = track_pose_map.get(a.get("track_id"), "STANDING (BEKLEME)")
-                for ba in bag_alerts:
-                    owner_id = ba.get("owner_track_id", 0)
-                    owner_trk = next((t for t in tracked_objects if t["track_id"] == owner_id), tracked_objects[0] if tracked_objects else None)
-                    last_bag_ts = last_bag_cloud_alert.get(owner_id, 0.0)
-                    should_send_bag = (sim_clock - last_bag_ts) >= 20.0
-                    if should_send_bag:
-                        last_bag_cloud_alert[owner_id] = sim_clock
-                    alerts.append(
-                        {
-                            "message": ba["message"],
-                            "track_id": owner_id,
-                            "roi_name": f"Abandoned_{ba['class_name']}",
-                            "dwell_time": ba["unattended_seconds"],
-                            "efficiency": 0.05,
-                            "bbox": owner_trk["bbox"] if owner_trk else ba["bbox"],
-                            "pose_action": "ABANDONED_OBJECT (TERK EDILMIS NESNE)",
-                            "timestamp": sim_clock,
-                            "should_send_to_cloud": should_send_bag,
-                        }
+
+                # Poz anomalisi varsa alarm sistemini bilgilendir
+                for pa in pose_alerts:
+                    if "DÜŞME" in pa["action"]:
+                        cloud_engine.alarm_manager.evaluate_and_trigger(
+                            title=f"Acil Vücut Pozu Anomalisi: {pa['action']}",
+                            description=f"İz #{pa['track_id']} için acil düşme/tehlike pozisyonu tespit edildi.",
+                            category="DÜŞME / ACİL DURUM",
+                            risk_percent=92.0,
+                            camera_id=privacy_bridge.camera_id,
+                            track_id=pa["track_id"],
+                        )
+
+            abandoned_owners = {ba.get("owner_track_id") for ba in bag_alerts}
+            active_risk_list: List[Dict[str, Any]] = []
+
+            for obj in tracked_objects:
+                tid = obj["track_id"]
+                bm = watchlist_matches.get(tid)
+                risk_res = cloud_engine.risk_scorer.compute_person_risk(
+                    behavior_status=obj.get("behavior_status", "NORMAL"),
+                    roi_name=obj.get("roi_name"),
+                    dwell_time=obj.get("dwell_time", 0.0),
+                    time_threshold=behavior_analyzer.time_threshold,
+                    efficiency=obj.get("efficiency", 1.0),
+                    pose_action=obj.get("pose_action", "BEKLEME"),
+                    watchlist_hit=bool(bm),
+                    watchlist_risk_level=(bm or {}).get("risk_level"),
+                    liveness_is_live=True,
+                    pre_breach=bool(obj.get("pre_breach", False)),
+                    abandoned_bag_owner=(tid in abandoned_owners),
+                )
+                obj["risk_percent"] = risk_res["risk_percent"]
+                obj["risk_tier"] = risk_res["risk_tier"]
+                obj["risk_breakdown"] = risk_res["breakdown"]
+                active_risk_list.append(
+                    {
+                        "track_id": tid,
+                        "risk_percent": risk_res["risk_percent"],
+                        "risk_tier": risk_res["risk_tier"],
+                        "behavior_status": obj.get("behavior_status", "NORMAL"),
+                        "roi_name": obj.get("roi_name") or "Bölge Dışı",
+                        "pose_action": obj.get("pose_action", "BEKLEME"),
+                        "dwell_time": obj.get("dwell_time", 0.0),
+                        "efficiency": obj.get("efficiency", 1.0),
+                        "breakdown": risk_res["breakdown"],
+                    }
+                )
+
+                # Erken ihlal uyarısı veya yüksek risk için anlık alarm kontrolü
+                if obj.get("pre_breach"):
+                    cloud_engine.alarm_manager.evaluate_and_trigger(
+                        title=f"Erken Bölge İhlali Tahmini (İz #{tid})",
+                        description=f"İz #{tid} 3 saniye içinde kritik bölgeye giriş yapacak şekilde ilerliyor.",
+                        category="ERKEN İHLAL",
+                        risk_percent=max(38.0, risk_res["risk_percent"]),
+                        camera_id=privacy_bridge.camera_id,
+                        track_id=tid,
                     )
 
-            # 5. KVKK Privacy Bridge -> Cloud Layer (ArcFace 512-D + Milvus Watchlist Search + Gemini VLM)
+            cloud_engine.active_person_risks = sorted(
+                active_risk_list, key=lambda x: x["risk_percent"], reverse=True
+            )
+            max_risk_now = (
+                max([r["risk_percent"] for r in active_risk_list]) if active_risk_list else 0.0
+            )
+
+            track_map = {t["track_id"]: t for t in tracked_objects}
+            for a in alerts:
+                trk = track_map.get(a.get("track_id"), {})
+                a["pose_action"] = trk.get("pose_action", "BEKLEME")
+                a["risk_percent"] = trk.get("risk_percent", 0.0)
+
+            for ba in bag_alerts:
+                owner_id = ba.get("owner_track_id", 0)
+                owner_trk = track_map.get(owner_id, tracked_objects[0] if tracked_objects else None)
+                last_bag_ts = last_bag_cloud_alert.get(owner_id, 0.0)
+                should_send_bag = (sim_clock - last_bag_ts) >= 20.0
+                if should_send_bag:
+                    last_bag_cloud_alert[owner_id] = sim_clock
+                alerts.append(
+                    {
+                        "message": ba["message"],
+                        "track_id": owner_id,
+                        "roi_name": f"Terk_Edilmis_{ba['class_name']}",
+                        "dwell_time": ba["unattended_seconds"],
+                        "efficiency": 0.05,
+                        "bbox": owner_trk["bbox"] if owner_trk else ba["bbox"],
+                        "pose_action": "TERK EDİLMİŞ NESNE",
+                        "risk_percent": owner_trk.get("risk_percent", 85.0) if owner_trk else 85.0,
+                        "timestamp": sim_clock,
+                        "should_send_to_cloud": should_send_bag,
+                    }
+                )
+
+            # 5. KVKK Gizlilik Köprüsü -> Bulut Katmanı (ArcFace 512-D + Milvus + Alarm Sistemi)
             for alert in alerts:
                 if alert.get("should_send_to_cloud"):
                     cloud_res = privacy_bridge.dispatch_suspicious_event(clean_frame_for_cloud, alert)
@@ -495,25 +563,28 @@ def main():
                         watchlist_matches[alert["track_id"]] = cloud_res["best_match"]
                         bm = cloud_res["best_match"]
                         print(
-                            f"🚨 [CLOUD MILVUS MATCH] Track #{alert['track_id']} in {alert['roi_name']} "
-                            f"-> {bm['name']} (Cosine Similarity={bm['cosine_similarity']:.4f}, "
-                            f"Risk={bm['risk_level']})"
+                            f"🚨 [BULUT MİLVUS EŞLEŞMESİ] İz #{alert['track_id']} | Bölge: {alert['roi_name']} "
+                            f"-> {bm['name']} (Benzerlik={bm['cosine_similarity']:.4f}, "
+                            f"Risk=%{cloud_res.get('risk_percent', 0)})"
                         )
 
-            # 6. Annotate Frame for OpenCV GUI & Web Dashboard Stream
+            # 6. Görselleştirme: ROI Bölgeleri, Takip Kutuları, Risk Çubukları ve Acil Alarm Çerçevesi
             behavior_analyzer.draw_roi(frame)
             draw_detections(frame, tracked_objects, watchlist_matches=watchlist_matches)
 
             for idx, alert in enumerate(alerts):
                 draw_alert(frame, alert["message"], position=(20, 48 + idx * 42))
 
+            alarm_summary = cloud_engine.alarm_manager.get_summary()
+            if alarm_summary.get("kritik_aktif_sayisi", 0) > 0 and int(time.time() * 3) % 2 == 0:
+                cv2.rectangle(frame, (4, 4), (frame.shape[1] - 5, frame.shape[0] - 5), (0, 0, 255), 6)
+
             inst_fps = 1.0 / max(1e-4, time.perf_counter() - t_frame_start)
             fps = 0.85 * fps + 0.15 * inst_fps
 
-            # Top-right HUD telemetry panel
-            hud_x = frame.shape[1] - 375
-            cv2.rectangle(frame, (hud_x - 10, 12), (frame.shape[1] - 12, 132), (18, 24, 38), -1)
-            cv2.rectangle(frame, (hud_x - 10, 12), (frame.shape[1] - 12, 132), (56, 189, 248), 1)
+            hud_x = frame.shape[1] - 390
+            cv2.rectangle(frame, (hud_x - 10, 12), (frame.shape[1] - 12, 152), (18, 24, 38), -1)
+            cv2.rectangle(frame, (hud_x - 10, 12), (frame.shape[1] - 12, 152), (56, 189, 248), 1)
             cv2.putText(
                 frame,
                 f"FPS: {fps:.1f} | YOLOv5m ({detector.device_str.upper()})",
@@ -528,14 +599,14 @@ def main():
                 f"Tespit: {len(dets_with_conf)} | DeepSORT Iz: {len(tracked_objects)}",
                 (hud_x, 62),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.52,
+                0.50,
                 (226, 232, 240),
                 1,
             )
             cv2.putText(
                 frame,
-                f"KVKK Yerel Kare: {privacy_bridge.blocked_raw_frames_count} (Ham Video Korundu)",
-                (hud_x, 88),
+                f"KVKK Yerel Kare: {privacy_bridge.blocked_raw_frames_count}",
+                (hud_x, 86),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.48,
                 (56, 189, 248),
@@ -543,15 +614,23 @@ def main():
             )
             cv2.putText(
                 frame,
-                f"Bulut Aktarimi: {privacy_bridge.transmitted_events_count} | Milvus Eslesme: {len(watchlist_matches)}",
-                (hud_x, 114),
+                f"En Yuksek Risk: %{max_risk_now:.0f} | Aktif Alarm: {alarm_summary.get('aktif_alarm_sayisi', 0)}",
+                (hud_x, 112),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.48,
-                (251, 191, 36),
+                (0, 0, 255) if max_risk_now >= 55 else (251, 191, 36),
+                1,
+            )
+            cv2.putText(
+                frame,
+                f"Bulut Aktarimi: {privacy_bridge.transmitted_events_count} | Milvus: {len(watchlist_matches)}",
+                (hud_x, 138),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (78, 222, 163),
                 1,
             )
 
-            # Update Web Dashboard stream buffer in Cloud Engine
             ok, jpg_buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
             if ok:
                 cloud_engine.latest_jpeg_frame = jpg_buf.tobytes()
@@ -561,6 +640,7 @@ def main():
                     "active_detections": len(dets_with_conf),
                     "active_tracks": len(tracked_objects),
                     "frames_processed_on_edge": privacy_bridge.blocked_raw_frames_count,
+                    "max_active_risk_percent": round(max_risk_now, 1),
                     "last_update": time.strftime("%H:%M:%S"),
                 }
             )
@@ -571,7 +651,7 @@ def main():
                     break
 
             if args.max_frames > 0 and frame_idx >= args.max_frames:
-                print(f"[Edge Layer] Completed {frame_idx} frames (--max-frames reached).")
+                print(f"[Uç Katmanı] {frame_idx} kare işlendi (--max-frames sınırına ulaşıldı).")
                 break
 
     except KeyboardInterrupt:

@@ -1,11 +1,11 @@
-"""DeepSORT Multi-Object Person Tracker with Kalman Filter & Re-ID Appearance Matching.
+"""DeepSORT Çoklu Nesne Takip Modülü — Kalman Filtresi ve Re-ID Görünüm Eşleştirme.
 
-Implements the TÜBİTAK 2209-A Edge Layer Person Tracking specification:
-- 8-state Kalman Filter state estimation (cx, cy, w, h, vx, vy, vw, vh)
-- 512-D L2-normalized Re-ID Appearance Descriptor extraction for occlusion resilience
-- Cascade matching with Hungarian Algorithm (scipy.optimize.linear_sum_assignment)
-  combining IoU, motion gating, and cosine appearance distance
-- Full trajectory history retention for downstream loitering & efficiency analysis
+TÜBİTAK 2209-A Uç Katmanı Kişi Takibi gereksinimlerini uygular:
+- 8 durumlu Kalman Filtresi kestirimi (cx, cy, w, h, vx, vy, vw, vh)
+- Kısa süreli engellemelerde (occlusion) kimlik korumak için 512 boyutlu L2-normalize
+  Re-ID görünüm öznitelik çıkarımı
+- IoU, hareket eşiği ve kosinüs görünüm mesafesini birleştiren Macar (Hungarian) ataması
+- Amaçsız bekleme ve yörünge verimliliği analizi için tam hareket geçmişi kaydı
 """
 
 import cv2
@@ -16,7 +16,7 @@ from typing import List, Dict, Tuple, Optional, Any
 
 
 def compute_iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
-    """Compute pairwise IoU matrix between two sets of [xmin, ymin, xmax, ymax] boxes."""
+    """İki [xmin, ymin, xmax, ymax] kutu kümesi arasında ikili IoU matrisini hesaplar."""
     if len(boxes_a) == 0 or len(boxes_b) == 0:
         return np.zeros((len(boxes_a), len(boxes_b)), dtype=np.float32)
 
@@ -37,12 +37,7 @@ def compute_iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
 
 
 class ReIDAppearanceExtractor:
-    """Extracts 512-dimensional L2-normalized Re-ID appearance embeddings from person crops.
-
-    Divides the person bounding box into upper-body (head/torso) and lower-body
-    horizontal stripes, computing multi-channel HSV/LAB color distributions and
-    spatial gradient orientation features projected into a 512-D unit vector.
-    """
+    """Kişi kırpımından 512 boyutlu L2-normalize Re-ID görünüm vektörü çıkarır."""
 
     def __init__(self, feature_dim: int = 512):
         self.feature_dim = feature_dim
@@ -50,7 +45,7 @@ class ReIDAppearanceExtractor:
         self._proj = rng.randn(384, feature_dim).astype(np.float32) / np.sqrt(384)
 
     def extract(self, frame: Optional[np.ndarray], bbox: Tuple[int, int, int, int]) -> np.ndarray:
-        """Return a 512-D L2-normalized appearance feature vector for a person bbox."""
+        """Kişi sınırlayıcı kutusu için 512-D birim görünüm öznitelik vektörü döndürür."""
         if frame is None or frame.size == 0:
             vec = np.ones(self.feature_dim, dtype=np.float32)
             return vec / np.linalg.norm(vec)
@@ -70,7 +65,7 @@ class ReIDAppearanceExtractor:
         hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
 
-        # 3 horizontal body stripes (Head/Shoulders, Torso, Legs)
+        # Üst (baş/omuz), orta (gövde) ve alt (bacaklar) yatay şeritleri
         stripes = [hsv[0:42, :], hsv[42:85, :], hsv[85:128, :]]
         feats = []
         for stripe in stripes:
@@ -81,7 +76,6 @@ class ReIDAppearanceExtractor:
             stripe_feat /= np.linalg.norm(stripe_feat) + 1e-6
             feats.append(stripe_feat)
 
-        # Spatial Sobel gradient orientation features (96-D)
         gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
         gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
         mag = cv2.resize(np.hypot(gx, gy), (8, 12)).flatten()
@@ -97,7 +91,7 @@ class ReIDAppearanceExtractor:
 
 
 class KalmanPersonTrack:
-    """Single person track state estimated via an 8-D Constant-Velocity Kalman Filter."""
+    """8 boyutlu sabit hızlı Kalman Filtresi ile tekil kişi izi durumu."""
 
     def __init__(
         self,
@@ -117,7 +111,7 @@ class KalmanPersonTrack:
         w = max(10.0, float(x2 - x1))
         h = max(20.0, float(y2 - y1))
 
-        # State vector: [cx, cy, w, h, vx, vy, vw, vh]
+        # Durum vektörü: [cx, cy, w, h, vx, vy, vw, vh]
         self.x = np.array([cx, cy, w, h, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
         self.P = np.eye(8, dtype=np.float64) * 10.0
         self.P[4:, 4:] *= 100.0
@@ -139,7 +133,7 @@ class KalmanPersonTrack:
         self.history: List[Tuple[int, int]] = [(int(round(cx)), int(round(cy)))]
 
     def predict(self) -> List[int]:
-        """Advance Kalman state by one frame and return predicted [xmin, ymin, xmax, ymax]."""
+        """Kalman durumunu bir kare ilerletir ve tahmin edilen [xmin, ymin, xmax, ymax] kutusunu döndürür."""
         self.x = self.F @ self.x
         self.P = self.F @ self.P @ self.F.T + self.Q
         self.x[2] = max(10.0, self.x[2])
@@ -157,7 +151,7 @@ class KalmanPersonTrack:
         embedding: np.ndarray,
         confidence: float = 0.9,
     ) -> None:
-        """Update Kalman state and appearance embedding with matched measurement."""
+        """Eşleşen ölçüm ile Kalman durumunu ve Re-ID görünüm vektörünü günceller."""
         x1, y1, x2, y2 = bbox
         cx = (x1 + x2) / 2.0
         cy = (y1 + y2) / 2.0
@@ -171,7 +165,7 @@ class KalmanPersonTrack:
         self.x = self.x + (K @ y_res)
         self.P = (np.eye(8) - K @ self.H) @ self.P
 
-        # EMA update of Re-ID appearance embedding
+        # Görünüm vektörünü üstel hareketli ortalama (EMA) ile güncelle
         alpha = 0.85
         updated_emb = alpha * self.embedding + (1.0 - alpha) * embedding
         norm = np.linalg.norm(updated_emb)
@@ -189,7 +183,7 @@ class KalmanPersonTrack:
             self.history = self.history[-self.max_history :]
 
     def to_bbox(self) -> List[int]:
-        """Return current [xmin, ymin, xmax, ymax] integer bounding box."""
+        """Güncel [xmin, ymin, xmax, ymax] tamsayı kutu koordinatlarını döndürür."""
         cx, cy, w, h = self.x[:4]
         x1 = int(round(cx - w / 2.0))
         y1 = int(round(cy - h / 2.0))
@@ -207,11 +201,7 @@ class KalmanPersonTrack:
 
 
 class ObjectTracker:
-    """DeepSORT-based Multi-Object Tracker with Kalman Filter & Re-ID Appearance Matching.
-
-    Maintains drop-in API compatibility with the original ObjectTracker while upgrading
-    tracking to DeepSORT (Kalman motion + Hungarian assignment + Re-ID cosine similarity).
-    """
+    """Kalman Filtresi ve Re-ID Görünüm Eşleştirmeli DeepSORT Çoklu Nesne Takipçisi."""
 
     def __init__(
         self,
@@ -225,7 +215,6 @@ class ObjectTracker:
         self.next_object_id = 0
         self.max_disappeared = int(max_disappeared)
 
-        # Fix legacy bug where main.py passed iou_threshold (e.g. 0.3) into max_distance
         if max_distance <= 1.0:
             self.iou_threshold = float(max_distance)
             self.max_distance = 140.0
@@ -238,7 +227,6 @@ class ObjectTracker:
         self.reid = ReIDAppearanceExtractor(feature_dim=feature_dim)
 
         self.tracks: Dict[int, KalmanPersonTrack] = {}
-        # Legacy attributes exposed for backward compatibility
         self.objects: Dict[int, Tuple[int, int]] = {}
         self.disappeared: Dict[int, int] = {}
 
@@ -254,8 +242,7 @@ class ObjectTracker:
         embedding: Optional[np.ndarray] = None,
         confidence: float = 0.9,
     ) -> int:
-        """Register a new person track."""
-        # Handle legacy call where a 2-tuple centroid was passed
+        """Yeni kişi izi kaydeder."""
         if len(bbox) == 2:
             cx, cy = bbox
             bbox = (cx - 25, cy - 50, cx + 25, cy + 50)
@@ -276,7 +263,7 @@ class ObjectTracker:
         return tid
 
     def deregister(self, object_id: int) -> None:
-        """Remove a lost track by its ID."""
+        """Kaybolan izi kimliğine göre siler."""
         self.tracks.pop(object_id, None)
         self._sync_legacy_dicts()
 
@@ -286,18 +273,7 @@ class ObjectTracker:
         frame: Optional[np.ndarray] = None,
         confidences: Optional[List[float]] = None,
     ) -> List[Dict[str, Any]]:
-        """Update DeepSORT tracks with current frame detections.
-
-        Args:
-            rects: List of bounding boxes in (xmin, ymin, xmax, ymax) format
-            frame: Optional BGR frame used to extract 512-D Re-ID appearance embeddings
-            confidences: Optional list of detection confidence scores
-
-        Returns:
-            List of active tracked object dicts with keys:
-            track_id, bbox, centroid, confidence, history, velocity, age, hits
-        """
-        # Normalize rects in case 5-tuples (xmin, ymin, xmax, ymax, conf) are passed
+        """Yeni tespitlerle DeepSORT izlerini günceller ve aktif iz listesini döndürür."""
         normalized_rects: List[Tuple[int, int, int, int]] = []
         extracted_confs: List[float] = []
         for idx, r in enumerate(rects):
@@ -311,13 +287,9 @@ class ObjectTracker:
                 else:
                     extracted_confs.append(0.90)
 
-        # Step 1: Advance all existing tracks via Kalman prediction
         track_ids = list(self.tracks.keys())
-        predicted_boxes = []
-        for tid in track_ids:
-            predicted_boxes.append(self.tracks[tid].predict())
+        predicted_boxes = [self.tracks[tid].predict() for tid in track_ids]
 
-        # If no detections in this frame, prune expired tracks and return recently seen tracks
         if len(normalized_rects) == 0:
             for tid in list(self.tracks.keys()):
                 if self.tracks[tid].time_since_update > self.max_disappeared:
@@ -325,7 +297,6 @@ class ObjectTracker:
             self._sync_legacy_dicts()
             return self._format_outputs()
 
-        # Step 2: Extract Re-ID embeddings and centroids for new detections
         det_boxes = np.array(normalized_rects, dtype=np.float32)
         det_centroids = np.column_stack(
             [(det_boxes[:, 0] + det_boxes[:, 2]) / 2.0, (det_boxes[:, 1] + det_boxes[:, 3]) / 2.0]
@@ -340,7 +311,6 @@ class ObjectTracker:
                 self.register(bbox, det_embeddings[i], extracted_confs[i])
             return self._format_outputs()
 
-        # Step 3: Build DeepSORT joint cost matrix (Motion + IoU + Re-ID Cosine Distance)
         trk_boxes = np.array(predicted_boxes, dtype=np.float32)
         trk_centroids = np.column_stack(
             [(trk_boxes[:, 0] + trk_boxes[:, 2]) / 2.0, (trk_boxes[:, 1] + trk_boxes[:, 3]) / 2.0]
@@ -355,7 +325,6 @@ class ObjectTracker:
         iou_mat = compute_iou_matrix(trk_boxes, det_boxes)
         iou_cost = 1.0 - iou_mat
 
-        # Cosine distance = 1 - cosine_similarity
         cosine_sim = np.clip(trk_embeddings @ det_embeddings.T, -1.0, 1.0)
         appearance_cost = 0.5 * (1.0 - cosine_sim)
 
@@ -367,14 +336,12 @@ class ObjectTracker:
         else:
             cost_matrix = 0.65 * norm_center_cost + 0.35 * iou_cost
 
-        # Step 4: Solve optimal assignment via Hungarian Algorithm
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
         matched_rows = set()
         matched_cols = set()
 
         for r, c in zip(row_ind, col_ind):
-            # Gating check: either center distance is within max_distance or IoU >= iou_threshold
             if center_dist[r, c] <= self.max_distance or iou_mat[r, c] >= self.iou_threshold:
                 tid = track_ids[r]
                 self.tracks[tid].update(
@@ -385,12 +352,10 @@ class ObjectTracker:
                 matched_rows.add(r)
                 matched_cols.add(c)
 
-        # Step 5: Handle unmatched detections -> register new tracks
         for c in range(len(normalized_rects)):
             if c not in matched_cols:
                 self.register(normalized_rects[c], det_embeddings[c], extracted_confs[c])
 
-        # Step 6: Prune tracks that exceeded max_disappeared frames
         for r, tid in enumerate(track_ids):
             if r not in matched_rows:
                 if self.tracks[tid].time_since_update > self.max_disappeared:
@@ -400,7 +365,7 @@ class ObjectTracker:
         return self._format_outputs()
 
     def _format_outputs(self) -> List[Dict[str, Any]]:
-        """Format active tracks for downstream BehaviorAnalyzer and visualization."""
+        """Aşağı akış modülleri için aktif izleri standart sözlük biçiminde döndürür."""
         outputs: List[Dict[str, Any]] = []
         for tid, trk in self.tracks.items():
             if trk.time_since_update <= 2 and (trk.hits >= self.min_hits or trk.age <= 3):
@@ -419,5 +384,4 @@ class ObjectTracker:
         return outputs
 
 
-# Alias for explicit DeepSORT imports
 DeepSORTTracker = ObjectTracker

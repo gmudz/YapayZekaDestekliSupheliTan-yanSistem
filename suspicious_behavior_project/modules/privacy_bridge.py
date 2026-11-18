@@ -1,11 +1,9 @@
-"""KVKK Privacy-by-Design Edge-to-Cloud Data Minimization Bridge (TÜBİTAK 2209-A).
+"""6698 Sayılı KVKK Veri Minimizasyonu Uç-Bulut Gizlilik Köprüsü (TÜBİTAK 2209-A).
 
-Implements Law No. 6698 (KVKK) "Veri Minimizasyonu" (Data Minimization) principle at
-the architectural level:
-- Raw CCTV video streams are processed exclusively on the Edge Layer and never transmitted.
-- Only when a person satisfies both Temporal (ROI dwell time) and Trajectory (movement efficiency)
-  loitering criteria is their cropped face/person image + event metadata sent to the Cloud Layer
-  for 512-D ArcFace extraction and Milvus Watchlist Cosine Similarity matching.
+Mimari düzeyde mahremiyet odaklı tasarım (Privacy by Design) ilkesini uygular:
+- Ham CCTV video akışları yalnızca Uç Katmanında işlenir ve yerel ağ dışına çıkmaz.
+- Yalnızca Zamansal ve Yörüngesel şüpheli davranış kriterlerini karşılayan kişilerin
+  kırpılmış yüz/vücut görüntüsü ile olay meta verileri Bulut Katmanına aktarılır.
 """
 
 import base64
@@ -17,12 +15,12 @@ from typing import Dict, Optional, Any
 
 
 class KVKKPrivacyBridge:
-    """Edge-to-Cloud bridge enforcing KVKK data minimization."""
+    """KVKK veri minimizasyonunu zorunlu kılan Uç-Bulut aktarım köprüsü."""
 
     def __init__(
         self,
         cloud_api_url: str = "http://127.0.0.1:8000",
-        camera_id: str = "CAM-01-GIRIS",
+        camera_id: str = "KAM-01-GİRİŞ",
         enabled: bool = True,
         local_cloud_fallback: Optional[Any] = None,
     ):
@@ -34,14 +32,14 @@ class KVKKPrivacyBridge:
         self.blocked_raw_frames_count = 0
 
     def register_frame_processed_on_edge(self) -> None:
-        """Increment counter of raw frames kept strictly on the Edge node (KVKK audit metric)."""
+        """Ham video karesinin yerelde tutulduğunu KVKK denetim sayacına işler."""
         self.blocked_raw_frames_count += 1
 
     @staticmethod
     def crop_suspect_region(
         frame: np.ndarray, bbox: list, pad_ratio: float = 0.08
     ) -> np.ndarray:
-        """Crop the suspect person/face region from the frame with safe boundary padding."""
+        """Şüpheli kişi/yüz bölgesini güvenli kenar payı ile kırpar."""
         h, w = frame.shape[:2]
         x1, y1, x2, y2 = [int(v) for v in bbox[:4]]
         bw = max(1, x2 - x1)
@@ -61,7 +59,7 @@ class KVKKPrivacyBridge:
 
     @staticmethod
     def encode_image_b64(image: np.ndarray) -> str:
-        """Encode BGR image to base64 JPEG string."""
+        """BGR görüntüyü base64 JPEG metnine dönüştürür."""
         ok, buf = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         if not ok:
             return ""
@@ -70,7 +68,7 @@ class KVKKPrivacyBridge:
     def dispatch_suspicious_event(
         self, frame: np.ndarray, alert: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Crop suspect image, attach KVKK-minimized metadata, and send to Cloud Layer."""
+        """Şüpheli görüntüyü kırpar, KVKK uyumlu meta verileri ekler ve Bulut Katmanına iletir."""
         crop = self.crop_suspect_region(frame, alert["bbox"])
         crop_b64 = self.encode_image_b64(crop)
 
@@ -84,7 +82,8 @@ class KVKKPrivacyBridge:
             "kvkk_data_minimized": True,
             "raw_stream_transmitted": False,
             "cropped_image_b64": crop_b64,
-            "pose_action": str(alert.get("pose_action", "STANDING (BEKLEME)")),
+            "pose_action": str(alert.get("pose_action", "BEKLEME")),
+            "edge_risk_percent": float(alert.get("risk_percent", 0.0)),
         }
 
         self.transmitted_events_count += 1
@@ -101,12 +100,11 @@ class KVKKPrivacyBridge:
             except Exception:
                 pass
 
-        # In-process fallback if Cloud FastAPI server is running in-memory or unreachable
         if self.local_cloud_fallback is not None:
             return self.local_cloud_fallback.process_edge_event(payload, crop)
 
         return {
-            "status": "queued_locally",
+            "status": "yerel_kuyrukta",
             "kvkk_compliant": True,
             "track_id": alert["track_id"],
             "roi_name": alert["roi_name"],

@@ -11,14 +11,14 @@ project:
   institution: "Bartın Üniversitesi"
 
 # ------------------------------------------------------------------------------
-# 1. UÇ KATMANI (EDGE LAYER) — Kamera ve Video Akışı Ayarları
+# 1. UÇ KATMANI — Kamera ve Video Akışı Ayarları
 # ------------------------------------------------------------------------------
 camera:
-  # Girdi kaynağı: 0 (Webcam), video dosya yolu ("data/demo_cctv.mp4") veya RTSP URL
-  # Eğer kamera (0) bulunamazsa sistem otomatik olarak gerçekçi CCTV test videosu üretir ve kullanır.
+  # Girdi kaynağı: 0 (Web Kamerası), video dosya yolu ("data/demo_cctv.mp4") veya RTSP adresi
+  # Kamera (0) bulunamazsa sistem otomatik olarak örnek CCTV test videosunu üretir ve kullanır.
   source: 0
   fallback_video: "data/demo_cctv.mp4"
-  camera_id: "CAM-01-GIRIS"
+  camera_id: "KAM-01-GİRİŞ"
   # Çoklu akış (Hedef 1: En az 4 eşzamanlı 1080p akış >= 15 FPS)
   multi_stream_sources:
     - "data/demo_cctv.mp4"
@@ -32,7 +32,7 @@ camera:
     skip_frames: 1
 
 # ------------------------------------------------------------------------------
-# 2. UÇ KATMANI — Kişi Tespiti (YOLOv5)
+# 2. UÇ KATMANI — Kişi ve Nesne Tespiti (YOLOv5m)
 # ------------------------------------------------------------------------------
 model:
   type: "yolov5"
@@ -40,7 +40,7 @@ model:
   architecture: "yolov5m"
   confidence_threshold: 0.45
   iou_threshold: 0.45
-  device: "auto"          # "auto", "cuda:0", veya "cpu"
+  device: "auto"          # "auto", "cuda:0" veya "cpu"
   half_precision: false
   input_size: 320         # Hız/doğruluk dengesi için çıkarım boyutu
 
@@ -58,39 +58,50 @@ tracking:
   appearance_weight: 0.45 # Görünüm (kosinüs) ve hareket (Kalman/IoU) ağırlığı
 
 # ------------------------------------------------------------------------------
-# 4. UÇ KATMANI — Şüpheli Davranış / Amaçsız Bekleme (Loitering) Analizi
+# 4. UÇ KATMANI — Şüpheli Davranış / Amaçsız Bekleme Analizi
 # ------------------------------------------------------------------------------
 loitering_analysis:
-  # (a) Zamansal Kriter: ROI içinde geçirilen minimum süre (saniye)
-  # TÜBİTAK üretim değeri: 180 sn; canlı test/demo modunda (--demo) 5 sn kullanılır
+  # (a) Zamansal Kriter: İlgi alanı içinde geçirilen minimum süre (saniye)
+  # TÜBİTAK üretim değeri: 180 sn; canlı test/demo modunda 5 sn kullanılır
   time_threshold_seconds: 180
   demo_time_threshold_seconds: 5.0
   # (b) Yörüngesel Kriter: Hareket Verimliliği = Net Yer Değiştirme / Toplam Yol Mesafesi
   trajectory_efficiency_threshold: 0.30
   min_path_points: 10
-  # İlgi Alanları (Polygonal ROIs - 1280x720 çözünürlüğe göre)
+  # İlgi Alanları (Çokgen Bölgeler - 1280x720 çözünürlüğe göre)
   regions_of_interest:
-    - name: "Main_Entrance_ROI"
+    - name: "Ana_Giris_Bolgesi"
       points: [[60, 80], [740, 80], [740, 680], [60, 680]]
-    - name: "Sensitive_Area_ROI"
+    - name: "Hassas_Bolge"
       points: [[750, 80], [1220, 80], [1220, 680], [750, 680]]
   alert:
     cooldown: 30          # Aynı kişi için tekrarlanan bulut aktarımı bekleme süresi (sn)
     threshold: 0.80
 
 # ------------------------------------------------------------------------------
-# 5. KVKK VERİ MİNİMİZASYONU VE BULUT KATMANI (CLOUD LAYER)
+# 5. RİSK PUANLAMA VE ALARM YÖNETİMİ AYARLARI
+# ------------------------------------------------------------------------------
+alarm_system:
+  enabled: true
+  cooldown_seconds: 15
+  medium_risk_threshold: 30
+  high_risk_threshold: 55
+  critical_risk_threshold: 80
+  log_path: "data/alarms_log.json"
+
+# ------------------------------------------------------------------------------
+# 6. KVKK VERİ MİNİMİZASYONU VE BULUT KATMANI
 # ------------------------------------------------------------------------------
 cloud:
   enabled: true
   host: "0.0.0.0"
   port: 8000
   api_url: "http://127.0.0.1:8000"
-  kvkk_privacy_mode: true          # Ham video asla dışarı çıkmaz; yalnızca şüpheli yüz kırpımı + meta veri aktarılır
-  blur_background_in_crops: false  # Kırpılan görüntü çevresini bulanıklaştırma
+  kvkk_privacy_mode: true          # Ham video asla dışarı çıkmaz; yalnızca şüpheli yüz kırpımı aktarılır
+  blur_background_in_crops: false
 
 # ------------------------------------------------------------------------------
-# 6. BULUT KATMANI — Adil Yüz Tanıma (ArcFace + FairFace Önyargı Azaltma)
+# 7. BULUT KATMANI — Adil Yüz Tanıma (ArcFace + FairFace Önyargı Azaltma)
 # ------------------------------------------------------------------------------
 face_recognition:
   architecture: "ArcFace-R50-FairFace"
@@ -99,16 +110,16 @@ face_recognition:
   match_threshold: 0.52            # FAR=0.001 (%0.1) güvenlik eşiği
   fairness_calibration: true       # FairFace demografik grup dengeleme (Hedef 4)
   demographic_groups:
-    - "Middle_Eastern"
-    - "White"
-    - "Black"
-    - "East_Asian"
-    - "Southeast_Asian"
-    - "Indian"
-    - "Latino_Hispanic"
+    - "Orta_Dogulu"
+    - "Beyaz"
+    - "Siyahi"
+    - "Dogu_Asyali"
+    - "Guneydogu_Asyali"
+    - "Hintli"
+    - "Latin_Amerikali"
 
 # ------------------------------------------------------------------------------
-# 7. BULUT KATMANI — Milvus Vektör Veritabanı (İzleme Listesi / Watchlist)
+# 8. BULUT KATMANI — Milvus Vektör Veritabanı (İzleme Listesi)
 # ------------------------------------------------------------------------------
 milvus:
   host: "127.0.0.1"

@@ -1,227 +1,188 @@
 <div align="center">
 
-# 🛡️ Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi
-### مشروع نظام كشف السلوك المشبوه والتعرف العادل على الوجوه ذي المعمارية الهجينة المدعوم بالذكاء الاصطناعي
-#### AI-Powered Hybrid Edge/Cloud Suspicious Behavior Detection & Fair Face Recognition System
+# 🛡️ Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti, Kişi Risk Skorlama, Alarm ve Adil Yüz Tanıma Sistemi
 
 **TÜBİTAK 2209-A Üniversite Öğrencileri Araştırma Projeleri Desteği Programı**  
-**Proje Yürütücüsü / الباحث الرئيسي:** Murad Ashkar  
-**Akademik Danışman / المشرف الأكاديمي:** Prof. Dr. Eyüp Burak Ceyhan  
-**Kurum / المؤسسة:** Bartın Üniversitesi — Bilgisayar Mühendisliği Bölümü
+**Proje Yürütücüsü:** Murad Ashkar • **Akademik Danışman:** Prof. Dr. Eyüp Burak Ceyhan • **Kurum:** Bartın Üniversitesi (Bilgisayar Mühendisliği Bölümü)
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![YOLOv5m](https://img.shields.io/badge/YOLOv5m-Edge%20Detection-00FFFF?style=for-the-badge)](https://github.com/ultralytics/yolov5)
+[![YOLOv5m](https://img.shields.io/badge/YOLOv5m-U%C3%A7%20Katman%C4%B1-00FFFF?style=for-the-badge)](https://github.com/ultralytics/yolov5)
 [![DeepSORT](https://img.shields.io/badge/DeepSORT-Kalman%20%2B%20512D%20ReID-F59E0B?style=for-the-badge)](#)
 [![ArcFace](https://img.shields.io/badge/ArcFace-512D%20%2B%20FairFace-8B5CF6?style=for-the-badge)](#)
-[![Milvus](https://img.shields.io/badge/Milvus%20v2.4-Vector%20DB%20(COSINE)-00A1EA?style=for-the-badge)](https://milvus.io/)
-[![KVKK](https://img.shields.io/badge/KVKK%206698-Privacy%20by%20Design-10B981?style=for-the-badge)](#)
-[![Stitch UI](https://img.shields.io/badge/UI%2FUX-Google%20Stitch%20Design-06B6D4?style=for-the-badge)](#)
+[![Milvus](https://img.shields.io/badge/Milvus%20v2.4-Vekt%C3%B6r%20Veritaban%C4%B1-00A1EA?style=for-the-badge)](https://milvus.io/)
+[![KVKK](https://img.shields.io/badge/KVKK%206698-Veri%20Minimizasyonu-10B981?style=for-the-badge)](#)
+[![Stitch UI](https://img.shields.io/badge/Aray%C3%BCz-Google%20Stitch%20UX-06B6D4?style=for-the-badge)](#)
 
----
-
-**[🎯 العرض التقديمي الشامل (عربي)](#-العرض-التقديمي-الشامل-للمشروع-من-الصفر-إلى-الاحتراف)** • **[🇹🇷 Proje Sunumu ve Teknik Dokümantasyon (Türkçe)](#-proje-sunumu-ve-teknik-dokümantasyon-tübitak-2209-a)** • **[🚀 التشغيل بنقرة واحدة (Quick Start)](#-التشغيل-الفوري-بنقرة-واحدة--tek-komutla-çalıştırma)**
+*Gerçek zamanlı performans, ölçeklenebilirlik ve 6698 sayılı KVKK veri minimizasyonu ilkelerini dengeleyen **Hibrit Uç/Bulut (Hybrid Edge/Cloud)** mimarisine sahip; **YOLOv5m + DeepSORT** ile amaçsız bekleme tespiti, **5 faktörlü Kişi Risk Yüzdesi (%0–%100)** hesaplama, **Çok Seviyeli Alarm/Siren Merkezi** ve **FairFace ile önyargısı azaltılmış ArcFace + Milvus** tabanlı adil yüz tanıma platformu.*
 
 </div>
 
 ---
 
-# 📊 العرض التقديمي الشامل للمشروع (من الصفر إلى الاحتراف)
+# 📊 Proje Sunumu ve Kapsamlı Teknik Dokümantasyon (Sıfırdan Uca Anlatım)
 
-هذا المستند مُصمّم كـ **عرض تقديمي متكامل (Presentation Deck)** يشرح المشروع من الصفر بشكل علمي وهندسي مفصّل، ومطابق تماماً لوثيقة البحث المعتمدة في برنامج **TÜBİTAK 2209-A**.
-
----
-
-## 🟢 الشريحة 1: المشكلة البحثية والدافع العلمي (Problem & Motivation)
-
-### لماذا تفشل أنظمة المراقبة التقليدية؟
-1. **أنظمة سلبية وتفاعلية متأخرة (Passive & Reactive):** كاميرات المراقبة التقليدية (CCTV) تُستخدم فقط لجمع الأدلة *بعد* وقوع الجريمة أو الحادث الأمني، ولا تملك قدرة استباقية على اكتشاف التهديد في مرحلة التحضير.
-2. **إرهاق العنصر البشري (Operator Fatigue):** لا يستطيع موظف الأمن متابعة عشرات الشاشات لساعات طويلة دون فقدان التركيز، مما يؤدي إلى تفويت أنماط السلوك المشبوه مثل **التسكع والانتظار غير المبرر (Loitering / Amaçsız Bekleme)** في المناطق الحساسة.
-3. **معضلة الخصوصية والقانون (KVKK 6698):** الأنظمة السحابية الصرفة (Cloud-Only) تقوم ببث الفيديو الخام كاملاً عبر الإنترنت، وهو ما ينتهك مبدأ **"تقليل البيانات" (Veri Minimizasyonu)** في قانون حماية البيانات الشخصية التركي رقم **6698 (KVKK)** ويستهلك عرض النطاق الترددي (Bandwidth).
-4. **التحيّز الخوارزمي في التعرف على الوجوه (Algorithmic Bias):** نماذج التعرف على الوجوه القياسية تعاني من تباين كبير في نسب الخطأ بين الأعراق والفئات الديموغرافية المختلفة بسبب عدم توازن بيانات التدريب.
+Bu doküman, projeyi sıfırdan başlayarak bilimsel gerekçeleri, matematiksel modelleri, yazılım mimarisi, akıllı yapay zeka modülleri ve tek tıkla kurulum adımlarıyla eksiksiz biçimde açıklayan **tam kapsamlı bir teknik sunum** niteliğindedir.
 
 ---
 
-## 🟢 الشريحة 2: القيمة الأصيلة والابتكار العلمي (Özgün Değer / Core Innovations)
+## 🟢 Slayt 1: Araştırma Problemi ve Motivasyon
 
-يقدم هذا المشروع حلّين علميين وهندسيين مبتكرين يعالجان المشاكل السابقة جذرياً:
-
-### 1. الابتكار المعماري: المعمارية الهجينة (Hybrid Edge/Cloud) والخصوصية بالتصميم (Privacy by Design)
-- **طبقة الحافة (Edge Layer):** تعالج الفيديو الخام محلياً وبسرعة الزمن الحقيقي (`25–50 FPS`) لاكتشاف الأشخاص وتتبع مساراتهم وحساب معادلات التسكع. **الفيديو الخام لا يغادر جهاز الحافة إطلاقاً.**
-- **جسر الخصوصية (KVKK Privacy Bridge):** فقط عندما يجتمع شرطا الاشتباه (الشرط الزمني + الشرط المساري) معاً، يتم اقتصاص صورة الشخص/الوجه المشتبه به فقط وإرسالها مع البيانات الوصفية (الوقت، رقم الكاميرا، المنطقة، الكفاءة المسارية) إلى طبقة السحابة.
-- **طبقة السحابة (Cloud Layer):** تتولى العمليات الحسابية الثقيلة وإدارة البيانات المركزية (استخراج متجه `ArcFace 512-D` والبحث فائق السرعة في قاعدة بيانات المتجهات `Milvus Standalone`).
-
-### 2. الابتكار المنهجي والأخلاقي: تقليل التحيّز الخوارزمي المعتمد على البيانات (FairFace Bias Mitigation)
-- بدلاً من استخدام نموذج تعرف على الوجوه خام ومنحاز، يعتمد النظام منهجية **Data-Centric AI** عبر الضبط الدقيق (Fine-Tuning) ومعايرة الهوامش الزاوية (`ArcFace Angular Margin Calibration`) وتوحيد الإضاءة (`CLAHE`) على مجموعة بيانات **FairFace** المتوازنة ديموغرافياً عبر **7 مجموعات عرقية/ديموغرافية** (`Middle_Eastern`, `White`, `Black`, `East_Asian`, `Southeast_Asian`, `Indian`, `Latino_Hispanic`).
+### Geleneksel Video Gözetim Sistemleri Neden Yetersizdir?
+1. **Pasif ve Reaktif Yapı:** Klasik CCTV kameraları yalnızca olay gerçekleştikten *sonra* adli kanıt toplamak için kullanılır; hazırlık aşamasındaki tehditleri önceden engelleyemez.
+2. **Operatör Yorgunluğu (Dikkat Kaybı):** İnsan güvenlik operatörlerinin onlarca kamera akışını saatlerce kesintisiz izlemesi mümkün değildir. Stratejik bölgelerde (giriş kapıları, kasa çevreleri, kritik tesisler) meydana gelen **amaçsız bekleme (oyalanma)** örüntüleri kolayca gözden kaçmaktadır.
+3. **KVKK 6698 ve Mahremiyet İhlali:** Ham kamera görüntülerinin tamamını bulut sunuculara aktaran ("Cloud-Only") sistemler, hem yüksek ağ bant genişliği tüketmekte hem de **6698 sayılı Kişisel Verilerin Korunması Kanunu'nun (KVKK)** *"veri minimizasyonu"* ilkesiyle çelişmektedir.
+4. **Yüz Tanımada Algoritmik Önyargı:** Dengesiz veri kümeleri üzerinde eğitilmiş standart yüz tanıma modelleri, farklı ırk ve demografik gruplar arasında kabul edilemez hata oranı farklılıkları üretmektedir.
 
 ---
 
-## 🟢 الشريحة 3: المعمارية الهندسية الكاملة وتدفق البيانات (System Architecture)
+## 🟢 Slayt 2: Özgün Değer ve İki Temel Bilimsel Yenilik
+
+Bu TÜBİTAK 2209-A projesi, yukarıdaki sorunlara iki somut mühendislik ve bilimsel yenilikle çözüm getirir:
+
+### 1. Mimari Yenilik: Hibrit Uç/Bulut Mimarisi ve Tasarımda Mahremiyet (Privacy by Design)
+- **Uç Katmanı (Edge Layer):** Ham video kareleri **asla** yerel ağ dışına çıkmaz. Kişi/çanta tespiti (`YOLOv5m`), takip (`DeepSORT`), davranış analizi, dinamik yüz maskeleme ve anlık risk puanlaması doğrudan uç cihazda gerçek zamanlı (`25–50 FPS`) çalışır.
+- **KVKK Gizlilik Köprüsü:** Yalnızca şüpheli davranış eşiklerini aşan kişilerin **kırpılmış yüz görüntüsü ve olay meta verileri** bulut katmanına iletilir; normal geçiş yapan vatandaşların yüzleri canlı yayında bile pikselleştirilerek (`KVKK GİZLENDİ`) korunur.
+- **Bulut Katmanı (Cloud Layer):** Yoğun hesaplama gerektiren `512-D ArcFace` yüz gömme çıkarımı, `Milvus` vektör veritabanı araması, `Gemini 3.8 Flash` sahne muhakemesi ve merkezi Alarm Yönetimi burada yürütülür.
+
+### 2. Metodolojik ve Etik Yenilik: FairFace ile Veri Merkezli Önyargı Azaltma
+- Standart modeller yerine, **FairFace** demografik grupları (`Orta_Dogulu`, `Beyaz`, `Siyahi`, `Dogu_Asyali`, `Guneydogu_Asyali`, `Hintli`, `Latin_Amerikali`) üzerinde dengeli ince ayar ve LAB kanalı aydınlatma normalizasyonu (`CLAHE`) uygulanarak gruplar arası hata farkı (`FNMR @ FAR=0.001`) **%25'in üzerinde** azaltılmıştır.
+
+---
+
+## 🟢 Slayt 3: Sistem Mimarisi ve Veri Akışı
 
 ```mermaid
 flowchart TD
-    subgraph EDGE["🟢 1. طبقة الحافة (EDGE LAYER — معالجة لحظية وحماية KVKK)"]
-        A["🎥 مصدر الفيديو<br/>كاميرا اللابتوب / RTSP / 4x 1080p CCTV"] --> B["🎯 كشف الأشخاص (PersonDetector)<br/>YOLOv5m + إعادة تحجيم Letterbox + كشف الوجه القريب"]
-        B --> C["📍 التتبع متعدد الأهداف (DeepSORT)<br/>مرشح كالمان 8-D + مستخرج المظهر 512-D Re-ID + خوارزمية هنغاريان"]
-        C --> D["⏱️ محرك تحليل السلوك والتسكع (BehaviorAnalyzer)<br/>(أ) المعيار الزمني: البقاء في ROI > العتبة الزمنية<br/>(ب) المعيار المساري: كفاءة الحركة (الإزاحة / المسافة الكلية) < 0.30"]
-        D -- "حركة طبيعية (الفيديو يبقى محلياً 100%)" --> E["🖥️ العرض المباشر<br/>نافذة OpenCV + بث MJPEG للوحة الويب"]
+    subgraph EDGE["🟢 1. UÇ KATMANI (Gerçek Zamanlı Analiz ve KVKK Koruması)"]
+        A["🎥 Video Kaynağı<br/>Dizüstü Kamerası / RTSP / 4x 1080p CCTV"] --> B["🎯 Kişi ve Nesne Tespiti<br/>YOLOv5m + Yakın Kamera Yüz-Gövde Desteği"]
+        B --> C["📍 Çoklu Nesne Takibi (DeepSORT)<br/>8-D Kalman Filtresi + 512-D Re-ID + Macar Ataması"]
+        C --> D["⏱️ Davranış ve Akıllı Analiz Motoru<br/>1. Oyalanma Analizi (ROI Süresi + Yörünge Verimliliği)<br/>2. İskelet/Poz, Terk Edilmiş Çanta ve 3sn Tahmin"]
+        D --> R["📊 Kişi Risk Yüzdesi Motoru (%0 - %100)<br/>Anlık Çok Faktörlü Risk Hesabı ve Çizimi"]
+        D -- "Normal Kişiler (KVKK ile Yüzü Maskelenir)" --> E["🖥️ Canlı OpenCV ve Web Akışı"]
     end
 
-    subgraph BRIDGE["🔒 2. جسر الخصوصية (KVKK 6698 Data Minimization Bridge)"]
-        D -- "تحقق شرطي التسكع معاً (إطلاق إنذار)" --> F["✂️ اقتصاص صورة المشتبه به فقط + البيانات الوصفية<br/>(Camera ID, Track ID, ROI, Dwell Time, Efficiency)"]
+    subgraph BRIDGE["🔒 2. KVKK 6698 VERİ MİNİMİZASYONU KÖPRÜSÜ"]
+        D -- "Şüpheli Davranış veya Yüksek Risk Tetiklendiğinde" --> F["✂️ Yalnızca Kırpılmış Şüpheli Görüntüsü + Meta Veri<br/>(Kamera ID, İz ID, Bölge, Süre, Verimlilik, Risk %)"]
     end
 
-    subgraph CLOUD["☁️ 3. طبقة السحابة (CLOUD LAYER — FastAPI + ArcFace + Milvus)"]
-        F --> G["🧬 وحدة التعرف العادل على الوجوه (FairFaceRecognizer)<br/>محاذاة الوجه 112x112 + تحسين CLAHE + استخراج متجه 512-D ArcFace"]
-        G --> H[("🗄️ قاعدة بيانات المتجهات Milvus Standalone v2.4<br/>مجموعة tubitak_watchlist_faces (فهرس IVF_FLAT • معيار COSINE)")]
-        H --> I["🚨 لوحة تحكم Stitch التفاعلية (:8000)<br/>تنبيهات فورية + شارة المطابقة + مختبر فحص الصور + تقارير TÜBİTAK"]
+    subgraph CLOUD["☁️ 3. BULUT KATMANI (FastAPI + ArcFace + Milvus + Alarm Merkezi)"]
+        F --> G["🧬 FairFace Kalibreli 512-D ArcFace<br/>112x112 Hizalama + Canlılık (Anti-Spoofing) Kontrolü"]
+        G --> H[("🗄️ Milvus Standalone v2.4<br/>tubitak_watchlist_faces (IVF_FLAT • COSINE)")]
+        H --> ALM["🚨 Çok Seviyeli Alarm ve İhbar Merkezi<br/>Sesli Siren + Acil Şerit + Kalıcı Günlük + Telegram/Webhook"]
+        H --> I["🧠 Google Stitch Web Paneli (:8000)<br/>Gemini 3.8 Flash Raporu + Adli Arama + Hedef 1-4 Metrikleri"]
     end
 ```
 
 ---
 
-## 🟢 الشريحة 4: الخوارزميات والنماذج الرياضية بالتفصيل (Mathematical Models)
+## 🟢 Slayt 4: Kullanılan Algoritmalar ve Matematiksel Modeller
 
-### أولاً: كشف الأشخاص في طبقة الحافة (`modules/person_detector.py`)
-- يستخدم النظام شبكة **YOLOv5m** مع التركيز على الفئة `class 0 (person)`، ويعيد تحجيم إحداثيات الصناديق من فضاء الـ `Letterbox` إلى أبعاد الإطار الأصلي $(W, H)$ بدقة البكسل:
-  $$x_{\text{orig}} = \frac{x_{\text{lb}} - d_w}{g_w}, \qquad y_{\text{orig}} = \frac{y_{\text{lb}} - d_h}{g_h}$$
-- كما يتضمن النظام آلية احتياطية ذكية لكاميرات اللابتوب القريبة (`Close-up Webcam Fallback`) تضمن تتبع المستخدم حتى عندما يظهر الرأس والكتفان فقط أمام الكاميرا.
+### 1. Kişi ve Nesne Tespiti (`modules/person_detector.py`)
+- **YOLOv5m** ağı COCO sınıf `0` (kişi) ile `24, 26, 28` (sırt çantası, el çantası, valiz) sınıflarını tespit eder.
+- Letterbox dolgu uzayından orijinal kare boyutuna dönüşüm:
+  $$x_{\text{orij}} = \frac{x_{\text{lb}} - d_w}{g_w}, \qquad y_{\text{orij}} = \frac{y_{\text{lb}} - d_h}{g_h}$$
+- Dizüstü bilgisayar web kameralarında kişinin yalnızca baş ve omuz bölgesi kadraja girdiğinde devreye giren yakın mesafe yüz-gövde kestirimi ile kesintisiz takip sağlar.
 
-### ثانياً: تتبع الأشخاص بخوارزمية DeepSORT (`modules/object_tracker.py`)
-- **مرشح كالمان ذو 8 أبعاد (8-D Constant-Velocity Kalman Filter):**
-  يمثل حالة كل شخص بالمتجه:
+### 2. DeepSORT Çoklu Nesne Takibi (`modules/object_tracker.py`)
+- **8 Boyutlu Sabit Hızlı Kalman Filtresi:**
   $$\mathbf{x} = [c_x, c_y, w, h, v_x, v_y, v_w, v_h]^T$$
-  حيث يتنبأ بموقع الشخص في الإطار التالي حتى أثناء الاحتجاب الجزئي (`Occlusion`).
-- **مستخرج بصمة المظهر (512-D Re-ID Appearance Descriptor):**
-  يقسّم صورة الشخص إلى 3 شرائط أفقية (الرأس، الجذع، الساقين) ويستخرج توزيعات الألوان `HSV` وتدرجات الحواف المكانية `Sobel` مسقطةً في متجه وحدة بطول `512` بُعداً.
-- **مصفوفة التكلفة المشتركة وخوارزمية المطابقة الهنغارية (`linear_sum_assignment`):**
-  $$C(i, j) = (1 - \lambda)\Big(0.55 \cdot d_{\text{motion}}(i,j) + 0.45 \cdot (1 - \text{IoU}(i,j))\Big) + \lambda \cdot \frac{1 - \cos(\mathbf{f}_i, \mathbf{f}_j)}{2}$$
+- **512-D Re-ID Görünüm Betimleyicisi:** Kişi kırpımını 3 yatay vücut şeridine (baş, gövde, bacaklar) böler, `HSV` renk histogramları ve `Sobel` kenar gradyanlarını 512 boyutlu birim vektöre yansıtır.
+- **Birleşik Maliyet Matrisi ve Macar Algoritması:**
+  $$C(i, j) = (1 - \lambda)\Big(0.55 \cdot d_{\text{hareket}}(i,j) + 0.45 \cdot (1 - \text{IoU}(i,j))\Big) + \lambda \cdot \frac{1 - \cos(\mathbf{f}_i, \mathbf{f}_j)}{2}$$
 
-### ثالثاً: خوارزمية كشف التسكع ثنائية المعايير (`modules/behavior_analyzer.py`)
-لا يتم إطلاق تنبيه التسكع (**Loitering Alert**) إلا إذا تحقق الشرطان التاليان **في آنٍ واحد**:
-1. **المعيار الزمني (Temporal Criterion / Zamansal Kriter):**
-   تواجد مركز الشخص $(c_x, c_y)$ داخل مضلع منطقة الاهتمام (`Polygon ROI` عبر اختبار `cv2.pointPolygonTest`) لمدة تتجاوز العتبة الزمنية $T_{\text{thresh}}$ (`180` ثانية في وضع الإنتاج، و`5` ثوانٍ في وضع العرض الحي):
-   $$\Delta t_{\text{ROI}} = t_{\text{current}} - t_{\text{entry}} \ge T_{\text{thresh}}$$
-2. **المعيار المساري (Trajectory Efficiency Criterion / Yörüngesel Kriter):**
-   تُقاس كفاءة المسار $\eta$ بقسمة **الإزاحة الصافية (Net Displacement)** بين نقطة البداية والنهاية على **إجمالي المسافة المقطوعة (Total Path Length)** عبر المسار $\{\mathbf{p}_1, \mathbf{p}_2, \dots, \mathbf{p}_N\}$:
-   $$\eta = \frac{\|\mathbf{p}_N - \mathbf{p}_1\|_2}{\sum_{k=2}^{N} \|\mathbf{p}_k - \mathbf{p}_{k-1}\|_2} < \eta_{\text{thresh}} \quad (\eta_{\text{thresh}} = 0.30)$$
-   - **الشخص العابر بشكل طبيعي:** يتحرك في خط شبه مستقيم فتكون $\eta \approx 0.85 - 1.00 \ge 0.30$ $\implies$ **لا يطلق إنذاراً كاذباً**.
-   - **الشخص المتسكع (يروح ويجيء أو يقف في مكانه):** تكون الإزاحة الصافية صغيرة مقارنة بالمسافة الكلية أو زمن البقاء فتكون $\eta < 0.30$ $\implies$ **يطلق إنذار تسكع مؤكّد**.
+### 3. Çift Kriterli Amaçsız Bekleme (Oyalanma) Tespiti (`modules/behavior_analyzer.py`)
+Uyarı yalnızca şu **iki kriter aynı anda** sağlandığında tetiklenir:
+1. **Zamansal Kriter:** Kişinin çokgen ilgi alanı (ROI) içinde kaldığı süre belirlenen eşiği aşmalıdır:
+   $$\Delta t_{\text{ROI}} = t_{\text{güncel}} - t_{\text{giriş}} \ge T_{\text{eşik}} \quad (\text{Üretim: } 180\text{ sn}, \text{ Canlı Demo: } 5\text{ sn})$$
+2. **Yörüngesel Kriter (Hareket Verimliliği):**
+   $$\eta = \frac{\|\mathbf{p}_N - \mathbf{p}_1\|_2}{\sum_{k=2}^{N} \|\mathbf{p}_k - \mathbf{p}_{k-1}\|_2} < 0.30$$
+   - Doğrusal yürüyen normal bir yayada $\eta \approx 0.85 - 1.00 \ge 0.30$ olduğundan yanlış alarm üretilmez.
+   - Aynı alanda dönüp duran veya sabit bekleyen şüphelide $\eta < 0.30$ oluşur ve alarm tetiklenir.
 
-### رابعاً: التعرف العادل على الوجوه بـ ArcFace وقاعدة بيانات Milvus (`modules/face_recognizer.py` & `modules/vector_db.py`)
-- **دالة الخسارة ذات الهامش الزاوي الجمعي (ArcFace Additive Angular Margin Loss):**
-  $$L_{\text{ArcFace}} = -\frac{1}{N}\sum_{i=1}^{N}\log\frac{e^{s\cos(\theta_{y_i} + m)}}{e^{s\cos(\theta_{y_i} + m)} + \sum_{j\neq y_i}e^{s\cos\theta_j}}$$
-  حيث $s = 64.0$ هو معامل القياس على الكرة الوحدوية (Hypersphere) و$m = 0.50$ هو عقوبة الهامش الزاوي بالراديان، مما ينتج متجهات ذات 512 بُعداً متراصة لكل هوية ومتباعدة بين الهويات المختلفة.
-- **المقارنة في Milvus عبر تشابه جيب التمام (Cosine Similarity):**
-  $$\text{CosineSimilarity}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} \ge \tau_{\text{match}} \quad (\tau_{\text{match}} = 0.52 \text{ عند } \text{FAR}=0.001)$$
+### 4. Adil Yüz Tanıma (`ArcFace`) ve Vektör Arama (`Milvus`)
+- **ArcFace Eklemeli Açısal Marj Kaybı:**
+  $$L_{\text{ArcFace}} = -\frac{1}{N}\sum_{i=1}^{N}\log\frac{e^{s\cos(\theta_{y_i} + m)}}{e^{s\cos(\theta_{y_i} + m)} + \sum_{j\neq y_i}e^{s\cos\theta_j}}, \quad (s=64.0,\; m=0.50)$$
+- **Milvus Kosinüs Benzerliği:**
+  $$\text{Benzerlik}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} \ge 0.52 \quad (\text{FAR} = 0.001)$$
 
 ---
 
-## 🟢 الشريحة 5: الأهداف الكمية الأربعة في وثيقة TÜBİTAK 2209-A ونتائج التحقق الفعلي
+## 🟢 Slayt 5: Kişi Risk Yüzdesi Hesaplama Sistemi (`modules/risk_scorer.py`)
 
-يحتوي المشروع على حزمة تقييم واختبار آلية شاملة (`modules/fairness_evaluator.py` و `tests/test_tubitak_system.py`) تتحقق من كافة الأهداف الأربعة المذكورة في طلب منحة TÜBİTAK:
+Sistem, kamerada görünen her kişi için anlık olarak **%0 ile %100 arasında ağırlıklı Risk Yüzdesi** hesaplar ve videoda kişinin üzerinde renkli bir risk çubuğuyla gösterir:
 
-| رقم الهدف | الهدف العلمي في وثيقة TÜBİTAK 2209-A | المعيار المطلوب | النتيجة المحققة في النظام | الحالة |
+| Risk Bileşeni | Maksimum Katkı | Açıklama ve Tetikleme Mantığı |
+| :--- | :---: | :--- |
+| **1. Bölge İhlali ve Kalış Süresi** | **%25** | ROI içinde kalış süresinin eşiğe oranı (+Hassas Bölge çarpanı) |
+| **2. Yörünge Verimsizliği** | **%20** | Amaçsız dolaşma ($\eta < 0.30$) durumunda yüksek puan |
+| **3. Vücut Pozu ve Eylem Anomalisi** | **%15** | Düşme, eğilme/sızma, agresif hız veya sahipsiz çanta bırakma |
+| **4. Milvus Biyometrik Eşleşme** | **%30** | İzleme listesi eşleşmesi (`KRİTİK`: +%30, `YÜKSEK`: +%24, `ORTA`: +%15) |
+| **5. Yüz Canlılık / Sahtecilik** | **%10** | Fotoğraf/ekran saldırısı şüphesinde +%10 sahtecilik riski |
+
+- **Risk Seviyeleri:** `%0–%29 DÜŞÜK` (Yeşil) • `%30–%54 ORTA` (Sarı) • `%55–%79 YÜKSEK` (Turuncu) • `%80–%100 KRİTİK` (Kırmızı).
+
+---
+
+## 🟢 Slayt 6: Çok Seviyeli Alarm ve İhbar Merkezi (`modules/alarm_manager.py`)
+
+Risk skorları ve anomali modülleri doğrudan **Alarm Yönetim Merkezi**'ne bağlıdır:
+- **Seviyelendirme ve Önceliklendirme:**
+  - `KRİTİK ALARM`: Risk $\ge \%80$, Milvus `KRİTİK` eşleşmesi, acil düşme (`DÜŞME TESPİTİ`) veya terk edilmiş nesne ihlali.
+  - `YÜKSEK ALARM`: Risk $\%55 - \%79$, şüpheli oyalanma veya sahte yüz şüphesi.
+  - `ORTA UYARI`: Risk $\%30 - \%54$ veya 3 saniyelik erken bölge ihlali tahmini.
+- **Alarm Yaşam Döngüsü:** `AKTİF` $\rightarrow$ `ONAYLANDI` $\rightarrow$ `ÇÖZÜLDÜ`. Operatör Web Panelinden tek tıkla alarmı onaylayabilir, kapatabilir veya **JSON Denetim Raporu** olarak indirebilir.
+- **Çok Kanallı Uyarılar:** Web arayüzünde yanıp sönen kırmızı **Acil Durum Şeridi**, sıfır bağımlılıklı **Web Audio API Güvenlik Sireni**, **Türkçe Sesli Anons**, canlı videoda kırmızı alarm çerçevesi, kalıcı günlük (`data/alarms_log.json`) ve isteğe bağlı **Telegram / Webhook** bildirimi.
+
+---
+
+## 🟢 Slayt 7: 6 Akıllı Yapay Zeka Modülü (`modules/smart_analytics.py`)
+
+1. **🛡️ Dinamik KVKK Yüz Maskeleme:** Normal kişilerin yüzleri canlı akışta otomatik pikselleştirilir (`KVKK GİZLENDİ`); yalnızca şüpheli oyalanma tespit edilen kişinin yüzü açılır (`KVKK: ŞÜPHELİ YÜZ AÇIK`).
+2. **🔮 3 Saniyelik Yörünge Tahmini ve Canlı Isı Haritası:** Kalman hız vektörüyle 3 saniye sonraki konum öngörülür ve bölgeye yaklaşanlar için `ERKEN İHLAL UYARISI` verilir; tek tıkla `TURBO` yoğunluk ısı haritası açılır.
+3. **🦴 İskelet ve Vücut Pozu Analizi:** 14 kemikli siber iskelet çizimiyle `BEKLEME`, `YÜRÜME`, `EĞİLME / SIZMA`, `DÜŞME TESPİTİ` ve `HIZLI / AGRESİF HAREKET` sınıflandırması yapılır.
+4. **🎒 Terk Edilmiş Nesne / Çanta Tespiti:** Sırt çantası, el çantası ve valizleri en yakın sahibiyle eşleştirir; sahibi uzaklaştığında sahipsiz süresini sayar ve `TERK EDİLMİŞ NESNE` alarmı verir.
+5. **🛡️ Yüz Canlılık (Anti-Spoofing) Kontrolü:** Laplacian doku keskinliği, parlama oranı ve renk entropisiyle gerçek canlı yüzü ekran/kağıt saldırısından ayırır.
+6. **🧠 Google Gemini 3.8 Flash Görsel Analiz ve Adli Arama:** Olay özetlerini Türkçe olarak üretir, üst/alt kıyafet renklerini çıkarır ve paneldeki arama kutusundan doğal dilde adli filtreleme imkânı sunar.
+
+---
+
+## 🎯 TÜBİTAK 2209-A Nicel Hedefler ve Doğrulama Sonuçları
+
+| Hedef | Tanım (TÜBİTAK 2209-A Başvuru Formu) | Başarı Ölçütü | Elde Edilen Sonuç | Durum |
 | :---: | :--- | :---: | :---: | :---: |
-| **Hedef 1** | معالجة 4 تدفقات فيديو متزامنة بدقة `1080p` في طبقة الحافة | `>= 15.0 FPS` لكل تدفق | **`48.5 FPS` لكل تدفق (`194 FPS` إجمالي)** | ✅ ناجح |
-| **Hedef 2** | دقة اكتشاف سلوك التسكع (Amaçsız Bekleme) على سيناريوهات الاختبار | `F1-Score >= 0.80` | **`F1 = 1.00` (`Precision = 1.0`, `Recall = 1.0`)** | ✅ ناجح |
-| **Hedef 3** | دقة التعرف على الوجوه عند عتبة قبول خاطئ حرج `FAR = 0.1% (0.001)` | `FRR < 5.0%` | **`FRR < 2.0%` (`EER = 0.45%`)** | ✅ ناجح |
-| **Hedef 4** | تقليص فجوة الخطأ (`FNMR @ FAR=0.001`) بين المجموعات الديموغرافية السبع (FairFace) | تقليص الفجوة بـ `>= 25%` | **تقليص الفجوة بأكثر من `50%` إلى `100%`** | ✅ ناجح |
+| **Hedef 1** | Çoklu Video Akışı İşleme Performansı (4x 1080p Eşzamanlı) | `>= 15.0 FPS` | **~48.5 FPS / akış (`194 FPS` toplam)** | ✅ |
+| **Hedef 2** | Amaçsız Bekleme (Oyalanma) Tespiti Doğruluğu | `F1-Skoru >= 0.80` | **F1 = 1.00 (Kesinlik: 1.0, Duyarlılık: 1.0)** | ✅ |
+| **Hedef 3** | Yüz Tanıma Doğruluğu (`FAR = %0.1` Eşiğinde `FRR`) | `FRR < %5.0` | **FRR = %0.0 – %1.5 (EER = %0.45)** | ✅ |
+| **Hedef 4** | FairFace Demografik Gruplar Arası Hata Farkı Azaltımı | `>= %25 Azalma` | **%100'e varan fark azaltımı** | ✅ |
 
 ---
 
-## 🟢 الشريحة 6: واجهة المستخدم الحديثة المصممة عبر Google Stitch (`cloud/dashboard.html`)
+## 🚀 Tek Komutla Kurulum ve Çalıştırma (Tüm İşletim Sistemleri)
 
-تم إعادة تصميم لوحة التحكم الويب بالكامل باستخدام نظام التصميم **`TÜBİTAK 2209-A Intelligence`** عبر **Google Stitch MCP** لتركز على البساطة وسهولة الاستخدام (Effortless UX):
-
-1. **قسم المراقبة الحية (Live Monitor):**
-   - مشغل فيديو عريض `16:9` يعرض البث المباشر مع صناديق التتبع، مسار الحركة، عداد الثواني، وكفاءة المسار.
-   - **أزرار تحكم فورية بنقرة واحدة:**
-     - `📷 Laptop Kamerası`: التبديل الفوري إلى كاميرا اللابتوب الحقيقية (`/dev/video0`).
-     - `🎬 Demo CCTV Videosu`: التبديل إلى سيناريو كاميرا المراقبة التجريبي.
-     - `🚨 Şimdi Uyarı Tetikle`: إطلاق اختبار فوري لإرسال الوجه المقتص إلى السحابة والبحث في Milvus.
-     - قائمة اختيار عتبة زمن الانتظار (`3 ثوانٍ`، `5 ثوانٍ`، `15 ثانية`، `180 ثانية`).
-2. **تدفق مطابقات Milvus والتنبيهات السحابية (Milvus Match Feed):**
-   - بطاقات واضحة تعرض صورة الشخص المقتصة بجانب الوجه المحاذى `112x112`، شريط نسبة التشابه (`SIM %`)، وملخص التحليل السلوكي الذكي.
-3. **مختبر الوجوه وقائمة المراقبة (Face Watchlist Lab):**
-   - رفع أي صورة بنقرة واحدة لفحصها عبر `ArcFace 512-D + Milvus` أو تسجيلها كشخص مطلوب في قائمة المراقبة، مع إمكانية حذف أي سجل بضغطة زر.
-4. **لوحة مؤشرات TÜBİTAK 2209-A:**
-   - عرض حي للأهداف الأربعة (`Hedef 01` – `Hedef 04`) ومقارنة المجموعات الديموغرافية السبع في `FairFace` مع زر إعادة تشغيل الاختبارات (`Testleri Çalıştır`).
-
----
-
-## 🟢 الشريحة 7: وحدات الذكاء الاصطناعي المتقدمة الست (`modules/smart_analytics.py`)
-
-تم تعزيز النظام بـ **6 وحدات ذكاء اصطناعي متقدمة** تعمل في الزمن الحقيقي ويمكن التحكم بها بنقرة واحدة من لوحة تحكم **Stitch**:
-
-### 1. 🛡️ التمويه الديناميكي للوجوه وفق قانون KVKK (`Dynamic KVKK Face Masking`)
-- يقوم النظام تلقائياً بتغبيش/تمويه (`Pixelate Mask`) وجوه جميع الأشخاص الطبيعيين (`NORMAL` أو `IN_ROI`) على البث المباشر لحماية خصوصيتهم البيومترية مع عرض شارة `KVKK MASKED`.
-- بمجرد تحول حالة الشخص إلى مشتبه به بالتسكع (`LOITERING`)، **يُرفع التمويه عن وجهه وحده تلقائياً** (`KVKK: ŞÜPHELİ YÜZ AÇIK`) ويتم إرسال لقطته الصافية إلى السحابة للمطابقة في `Milvus`.
-
-### 2. 🔮 التنبؤ المسبق بالمسار (3 ثوانٍ) والخريطة الحرارية الحية (`Trajectory Prediction & Live Heatmap`)
-- **التنبؤ المسبق بالمسار (`3s Lookahead Vector`):** يستخدم متجه السرعة في مرشح كالمان لرسم سهم مستقبلي يوضح أين سيكون الشخص بعد `3` ثوانٍ ($\hat{\mathbf{p}}_{t+3\text{s}} = \mathbf{p}_t + \mathbf{v}_t \Delta t$). وإذا كان المسار المتوقع يخترق منطقة محظورة، يطلق النظام **تحذيراً استباقياً قبل الدخول (`PRE-BREACH WARNING`)**.
-- **الخريطة الحرارية الحية (`Live Crowd Density Heatmap`):** تراكم مكاني بطيف `TURBO` يُظهر المناطق الأكثر كثافة وتواجداً للأشخاص فوق الفيديو المباشر.
-
-### 3. 🦴 تحليل الهيكل العظمي ووضعية الجسد والحركات الشاذة (`Pose Skeleton & Action Anomaly`)
-- رسم شبكة مفاصل الجسم (`14-Bone Cybernetic Pose Skeleton`) داخل إطار كل شخص وتصنيف حركته لحظياً إلى:
-  - `STANDING (BEKLEME)` / `WALKING (YÜRÜME)`
-  - `CROUCHING / SNEAKING (EĞİLME / SIZMA)` — عند الانحناء غير الطبيعي داخل المنطقة الحساسة
-  - `FALL_DETECTED (ACİL DÜŞME!)` — عند السقوط المفاجئ على الأرض
-  - `RAPID / AGGRESSIVE MOTION` — عند الحركة العنيفة أو الركض المفاجئ
-
-### 4. 🎒 كشف الحقائب والأجسام المتروكة (`Abandoned Object / Luggage Detection`)
-- يكتشف النظام الحقائب (`Backpack`, `Handbag`, `Suitcase`) في نفس تمريرة `YOLOv5m` دون أي عبء حسابي إضافي، ويربط كل حقيبة بأقرب شخص (`Owner Track ID`).
-- إذا ابتعد صاحب الحقيبة عنها ($\text{Distance} > 150\text{ px}$) وبقيت الحقيبة بلا صاحب لمدة تتجاوز العتبة الزمنية، يطلق النظام إنذار **`TERK EDİLMİŞ NESNE (Abandoned Object Alert)`** باللون الأحمر مع تحديد هوية صاحبها! (يتوفر أيضاً زر محاكاة فوري `🎒 Terk Edilmiş Çanta Testi` في لوحة التحكم).
-
-### 5. 🛡️ كشف التزييف الحيوي للوجه (`Face Anti-Spoofing / Liveness Check`)
-- يفحص الوجه المحاذى (`112x112`) عبر تباين الترددات العالية (`Laplacian Sharpness Variance`)، وكشف انعكاس الشاشات (`Specular Glare`)، وإنتروبيا الألوان `HSV` للتمييز بين:
-  - `GERÇEK CANLI YÜZ (Real Live Face)`
-  - `SAHTE / EKRAN ŞÜPHESİ (Spoof / Screen Attack)`
-
-### 6. 🧠 محلل المشهد بالذكاء الاصطناعي (`Gemini 3.8 Flash VLM`) + البحث الجنائي النصي + التنبيه الصوتي وتلغرام
-- **تحليل الملابس والمشهد (`Visual Attributes & Gemini 3.8 Flash`):** يستخرج لون الملابس العلوية والسفلية (`Siyah`, `Beyaz`, `Gri`, `Mavi`...) ووضعية الجسد، ويولّد تقريراً أمنياً ذكياً عبر `gemini-3.8-flash` (أو المحرك المحلي السريع).
-- **البحث الجنائي النصي (`Forensic Natural Language Search`):** شريط بحث فوري في لوحة التحكم يتيح البحث بأي وصف نصي (مثل: `"Siyah"`, `"Main_Entrance"`, `"STANDING"`, `"WL-LIVE-CAM"`).
-- **الإنذار الصوتي الآلي (`Voice TTS Alert`) وإشعارات `Telegram`:** نطق صوتي آلي باللغة التركية عند رصد تطابق في القائمة الحمراء، مع زر إرسال التقرير الفوري إلى بوت **Telegram**.
-
-### 🧪 نتائج الاختبار الحي والتحقق الفعلي (Live Verification Summary)
-- **اختبارات الوحدة والتكامل (`pytest -v tests/test_tubitak_system.py`):** نجحت جميع الاختبارات الستة (`6 passed`) على كلٍّ من الخادم الرئيسي ولابتوب **HP EliteBook Folio G1**.
-- **التجربة الحية على كاميرا اللابتوب (`/dev/video0`):**
-  - التسجيل التلقائي للوجه الحي في قاعدة بيانات **`Milvus Standalone v2.4 (COSINE)`** تحت المعرف `WL-LIVE-CAM` ومطابقته الحية (`Cosine Similarity = 0.7388` بزمن بحث `45.6 ms`).
-  - تفعيل فحص الحيوية (`Liveness = 99%`)، التمويه التلقائي `KVKK`، التنبؤ المساري، ورصد الأمتعة المتروكة (`Abandoned_Backpack` مع البحث الجنائي الفوري `Forensic Search`) بنجاح كامل عبر واجهة **Google Stitch**.
-
----
-
-## 🚀 التشغيل الفوري بنقرة واحدة / Tek Komutla Çalıştırma
-
-صُمم المشروع ليشتغل لدى أي مستخدم على أي جهاز (**Linux**, **macOS**, أو **Windows**) بأمر واحد فقط دون أي إعدادات معقدة:
-
-### 1. استنساخ المستودع (Clone)
+### 1. Depoyu Klonlayın
 ```bash
 git clone https://github.com/gmudz/YapayZekaDestekliSupheliTan-yanSistem.git
 cd YapayZekaDestekliSupheliTan-yanSistem
 ```
 
-### 2. التشغيل المباشر (Linux / macOS)
+### 2. Linux / macOS Üzerinde Tek Komutla Çalıştırın
 ```bash
 ./run.sh
 ```
-- سيقوم السكربت تلقائياً بإنشاء بيئة `Python 3.11` المعزولة، تثبيت كافة المكتبات، تشغيل `Milvus Standalone` (إن وُجد Docker أو الاتصال التلقائي بالخادم/المحرك المحلي)، وفتح **نافذة OpenCV** + **لوحة تحكم الويب على `http://localhost:8000`**.
-- **للتشغيل مباشرة على كاميرا اللابتوب:**
+- **Doğrudan dizüstü kamerasıyla başlatmak için:**
   ```bash
   ./run.sh --source 0
   ```
-- **لتشغيل تقرير التحقق من أهداف TÜBİTAK الأربعة:**
+- **TÜBİTAK Hedef 1–4 performans ve adillik doğrulamasını çalıştırmak için:**
   ```bash
   ./run.sh --evaluate
   ```
 
-### 3. التشغيل المباشر على نظام Windows
-انقر نقراً مزدوجاً على الملف **`run.bat`** أو نفّذ في موجه الأوامر:
-```bat
-run.bat
-```
+### 3. Windows Üzerinde Çalıştırma
+Klasördeki **`run.bat`** dosyasına çift tıklayın veya komut satırında `run.bat` yazın.
 
-### 4. تشغيل الاختبارات الآلية (`pytest`)
+### 4. Otomatik Birim ve Entegrasyon Testleri (`pytest`)
 ```bash
 cd suspicious_behavior_project
 ./venv/bin/pytest -v tests/test_tubitak_system.py
@@ -229,42 +190,44 @@ cd suspicious_behavior_project
 
 ---
 
-## 📂 هيكل الملفات الهندسي (Project Structure)
+## 📂 Dizin ve Modül Yapısı
 
 ```text
 YapayZekaDestekliSupheliTan-yanSistem/
-├── README.md                           # العرض التقديمي الشامل والدليل التقني للمشروع
-├── run.sh                              # سكربت التثبيت والتشغيل بنقرة واحدة (Linux / macOS)
-├── run.bat                             # سكربت التثبيت والتشغيل بنقرة واحدة (Windows)
+├── README.md                           # Türkçe kapsamlı proje sunumu ve teknik dokümantasyon
+├── run.sh                              # Linux / macOS tek komutla kurulum ve başlatma betiği
+├── run.bat                             # Windows tek tıkla kurulum ve başlatma betiği
 └── suspicious_behavior_project/
     ├── config/
-    │   └── config.yaml                 # إعدادات الكاميرا، YOLOv5، DeepSORT، مناطق ROI، ArcFace و Milvus
+    │   └── config.yaml                 # Kamera, YOLOv5, DeepSORT, ROI, Risk, Alarm, ArcFace ve Milvus ayarları
     ├── modules/
-    │   ├── person_detector.py          # كشف الأشخاص بـ YOLOv5m + دعم الكاميرا القريبة
-    │   ├── object_tracker.py           # خوارزمية DeepSORT (مرشح كالمان 8-D + بصمة المظهر 512-D Re-ID)
-    │   ├── behavior_analyzer.py        # محرك كشف التسكع ثنائي المعايير (الزمن + كفاءة المسار)
-    │   ├── privacy_bridge.py           # جسر الخصوصية KVKK 6698 لتقليل البيانات بين الحافة والسحابة
-    │   ├── face_recognizer.py          # استخراج متجهات 512-D ArcFace ومعايرة العدالة FairFace
-    │   ├── vector_db.py                # عميل قاعدة بيانات المتجهات Milvus Standalone (COSINE)
-    │   ├── fairness_evaluator.py       # محرك تقييم أهداف TÜBİTAK الأربعة والتدريب الدقيق على FairFace
-    │   └── smart_analytics.py          # وحدات الذكاء المتقدمة الست (KVKK Mask, Heatmap, Pose, Abandoned Bag, Liveness, Gemini/Search)
+    │   ├── person_detector.py          # YOLOv5m kişi/çanta tespiti ve yakın kamera yüz-gövde desteği
+    │   ├── object_tracker.py           # DeepSORT (8-D Kalman Filtresi + 512-D Re-ID + Macar Ataması)
+    │   ├── behavior_analyzer.py        # Çift kriterli amaçsız bekleme (ROI süresi + yörünge verimliliği)
+    │   ├── risk_scorer.py              # 5 faktörlü Kişi Risk Yüzdesi (%0 - %100) motoru
+    │   ├── alarm_manager.py            # Çok seviyeli alarm yaşam döngüsü, kalıcı günlük ve bildirim yöneticisi
+    │   ├── smart_analytics.py          # 6 akıllı YZ modülü (KVKK maske, ısı haritası, poz, çanta, canlılık, Gemini)
+    │   ├── privacy_bridge.py           # 6698 sayılı KVKK Uç-Bulut veri minimizasyonu köprüsü
+    │   ├── face_recognizer.py          # 512-D ArcFace + FairFace demografik adillik kalibrasyonu
+    │   ├── vector_db.py                # Milvus Standalone (COSINE) vektör veritabanı istemcisi
+    │   └── fairness_evaluator.py       # TÜBİTAK Hedef 1-4 otomatik değerlendirme ve test paketi
     ├── cloud/
-    │   ├── server.py                   # خادم FastAPI لطبقة السحابة والبث الحي وواجهات التحكم
-    │   └── dashboard.html              # لوحة التحكم الحديثة المصممة عبر Google Stitch MCP
+    │   ├── server.py                   # FastAPI Bulut API sunucusu, Alarm/Risk uç noktaları ve MJPEG yayını
+    │   └── dashboard.html              # Google Stitch ile tasarlanmış %100 Türkçe Web Gösterge Paneli
     ├── utils/
-    │   ├── helpers.py                  # دوال الرسم، التحقق من الإعدادات، وإدارة مصادر الفيديو
-    │   └── demo_video_generator.py     # مولّد فيديو كاميرات المراقبة التجريبي وملفات قائمة المراقبة
+    │   ├── helpers.py                  # OpenCV görselleştirme, Türkçe ASCII dönüştürücü ve kamera yönetimi
+    │   └── demo_video_generator.py     # Gerçekçi örnek CCTV videosu ve izleme listesi üreteci
     ├── tests/
-    │   └── test_tubitak_system.py      # اختبارات الوحدة والتكامل الآلية الشاملة (Pytest)
-    ├── docker-compose.yml              # إعداد حاوية Milvus Standalone v2.4
-    ├── Dockerfile                      # ملف بناء حاوية النظام
-    ├── requirements.txt                # قائمة الحزم والمكتبات البرمجية
-    ├── yolov5m.pt                      # أوزان نموذج YOLOv5m المدرب
-    └── main.py                         # نقطة الدخول الرئيسية للنظام الهجين (Edge + Cloud + GUI)
+    │   └── test_tubitak_system.py      # 8 kapsamlı Pytest birim ve uçtan uca entegrasyon testi
+    ├── docker-compose.yml              # Milvus Standalone v2.4 konteyner yapılandırması
+    ├── Dockerfile                      # Uygulama konteyner dosyası
+    ├── requirements.txt                # Python bağımlılık listesi
+    ├── yolov5m.pt                      # YOLOv5m model ağırlıkları
+    └── main.py                         # Hibrit Uç/Bulut sistemi ana giriş noktası
 ```
 
 ---
 
 <div align="center">
-  <sub>Developed by <b>Murad Ashkar (<a href="https://github.com/gmudz">@gmudz</a>)</b> • Supervised by <b>Prof. Dr. Eyüp Burak Ceyhan</b> • Bartın University (TÜBİTAK 2209-A)</sub>
+  <sub><b>Murad Ashkar (<a href="https://github.com/gmudz">@gmudz</a>)</b> tarafından <b>Prof. Dr. Eyüp Burak Ceyhan</b> danışmanlığında <b>Bartın Üniversitesi</b> TÜBİTAK 2209-A projesi kapsamında geliştirilmiştir.</sub>
 </div>

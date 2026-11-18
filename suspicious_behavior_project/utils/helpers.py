@@ -1,4 +1,4 @@
-"""Utility functions for video processing, configuration validation, and visualization."""
+"""Video işleme, yapılandırma doğrulama ve görselleştirme yardımcı fonksiyonları."""
 
 import os
 import cv2
@@ -7,8 +7,16 @@ import numpy as np
 from typing import Dict, List, Tuple, Any
 
 
+TURKISH_TO_ASCII = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+
+
+def ascii_tr(text: str) -> str:
+    """OpenCV putText için Türkçe karakterleri güvenli ASCII karşılıklarına dönüştürür."""
+    return str(text).translate(TURKISH_TO_ASCII)
+
+
 def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
-    """Load YAML configuration file."""
+    """YAML yapılandırma dosyasını yükler."""
     if not os.path.exists(config_path):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alt_path = os.path.join(base_dir, config_path)
@@ -19,11 +27,11 @@ def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
 
 
 def validate_config(config: Dict[str, Any]) -> bool:
-    """Validate configuration dictionary keys."""
+    """Yapılandırma sözlüğündeki zorunlu anahtarları doğrular."""
     required_keys = ["camera", "model", "tracking", "loitering_analysis"]
     for key in required_keys:
         if key not in config and (key != "model" or "models" not in config):
-            print(f"Error: Missing required configuration key: {key}")
+            print(f"Hata: Eksik yapılandırma anahtarı: {key}")
             return False
     return True
 
@@ -34,12 +42,12 @@ def draw_detection(
     label: str,
     color: Tuple[int, int, int] = (0, 255, 0),
 ) -> None:
-    """Draw a detection bounding box and label on the frame."""
+    """Kare üzerine sınırlayıcı kutu ve etiket çizer."""
     x1, y1, x2, y2 = [int(v) for v in bbox[:4]]
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
     cv2.putText(
         frame,
-        label,
+        ascii_tr(label),
         (x1, max(20, y1 - 10)),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.65,
@@ -54,14 +62,15 @@ def draw_alert(
     position: Tuple[int, int] = (20, 45),
     color: Tuple[int, int, int] = (0, 0, 255),
 ) -> None:
-    """Draw a high-visibility alert banner on the frame."""
+    """Kare üzerine yüksek görünürlüklü acil uyarı şeridi çizer."""
     x, y = position
-    (tw, th), _ = cv2.getTextSize(alert_msg, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)
+    safe_msg = ascii_tr(alert_msg)
+    (tw, th), _ = cv2.getTextSize(safe_msg, cv2.FONT_HERSHEY_SIMPLEX, 0.70, 2)
     cv2.rectangle(
         frame,
         (max(0, x - 8), max(0, y - th - 10)),
         (min(frame.shape[1], x + tw + 12), min(frame.shape[0], y + 10)),
-        (15, 15, 60),
+        (15, 15, 65),
         -1,
     )
     cv2.rectangle(
@@ -72,12 +81,12 @@ def draw_alert(
         2,
     )
     cv2.putText(
-        frame, alert_msg, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2
+        frame, safe_msg, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.70, (255, 255, 255), 2
     )
 
 
 def load_camera_source(config: Dict[str, Any]) -> cv2.VideoCapture:
-    """Load and configure video capture source with automatic fallback to demo CCTV video."""
+    """Kamera/video kaynağını yükler; kamera yoksa örnek CCTV test videosuna geçer."""
     source = config["camera"]["source"]
     cap = cv2.VideoCapture(source)
     if cap.isOpened():
@@ -99,7 +108,7 @@ def load_camera_source(config: Dict[str, Any]) -> cv2.VideoCapture:
 
     cap = cv2.VideoCapture(fallback)
     if not cap.isOpened():
-        raise ValueError(f"Failed to open camera source {source} and fallback {fallback}")
+        raise ValueError(f"Kamera kaynağı ({source}) ve yedek video ({fallback}) açılamadı")
     return cap
 
 

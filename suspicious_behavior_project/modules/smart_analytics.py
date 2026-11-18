@@ -1,12 +1,12 @@
-"""Advanced AI Intelligence Extensions for TÜBİTAK 2209-A Surveillance System.
+"""TÜBİTAK 2209-A Gelişmiş Yapay Zeka Analitik Modülü (6 Akıllı Yetenek).
 
-Implements 6 state-of-the-art smart surveillance capabilities:
-1. Dynamic KVKK Privacy Face Masking (blurs innocent faces on-the-fly, unmasks only confirmed suspects)
-2. Kalman Future Trajectory Prediction (3s lookahead + Pre-Breach Warning) & Live Crowd Density Heatmap
-3. Pose Skeleton Estimation & Action Anomaly Detection (Fall, Crouching/Sneaking, Rapid/Aggressive Motion)
-4. Abandoned Object / Luggage Detection (associates bags with owner Track ID and alerts when left unattended)
-5. Face Anti-Spoofing / Liveness Verification (Laplacian frequency, glare & color entropy analysis)
-6. Google Gemini 3.8 Flash VLM Scene Reasoning, Visual Attribute Tagging & Natural Language Forensic Search
+İçerdiği 6 gerçek zamanlı yapay zeka modülü:
+1. Dinamik KVKK Yüz Maskeleme (normal kişilerin yüzünü bulanıklaştırır, yalnızca şüphelileri açar)
+2. Kalman Gelecek Yörünge Tahmini (3 saniye ileri tahmin + Erken İhlal Uyarısı) ve Canlı Isı Haritası
+3. Vücut İskeleti ve Poz/Eylem Anomalisi Tespiti (Düşme, Eğilme/Sızma, Hızlı/Agresif Hareket)
+4. Terk Edilmiş Nesne / Çanta Tespiti (çantayı sahibiyle ilişkilendirir, sahipsiz kalınca alarm verir)
+5. Yüz Canlılık ve Sahtecilik (Anti-Spoofing) Doğrulaması
+6. Google Gemini 3.8 Flash Görsel Muhakeme, Kıyafet Öznitelik Çıkarımı, Adli Metin Arama ve Telegram Bildirimi
 """
 
 import os
@@ -17,26 +17,28 @@ import numpy as np
 import requests
 from typing import Dict, List, Tuple, Optional, Any
 
+from utils.helpers import ascii_tr
+
 
 class SmartIntelligenceEngine:
-    """Unified engine for the 6 smart AI extensions on Edge and Cloud layers."""
+    """Uç ve Bulut katmanları için 6 gelişmiş yapay zeka uzantısını yönetir."""
 
     COLOR_PALETTE_NAMES = [
-        ("Siyah (Black)", np.array([25, 25, 25])),
-        ("Beyaz (White)", np.array([225, 225, 225])),
-        ("Gri (Gray)", np.array([128, 128, 128])),
-        ("Lacivert/Mavi (Blue)", np.array([170, 75, 35])),
-        ("Kırmızı (Red)", np.array([40, 40, 190])),
-        ("Yeşil (Green)", np.array([50, 150, 50])),
-        ("Sarı/Bej (Yellow/Beige)", np.array([120, 200, 215])),
-        ("Kahverengi (Brown)", np.array([55, 85, 135])),
+        ("Siyah", np.array([25, 25, 25])),
+        ("Beyaz", np.array([225, 225, 225])),
+        ("Gri", np.array([128, 128, 128])),
+        ("Lacivert / Mavi", np.array([170, 75, 35])),
+        ("Kırmızı", np.array([40, 40, 190])),
+        ("Yeşil", np.array([50, 150, 50])),
+        ("Sarı / Bej", np.array([120, 200, 215])),
+        ("Kahverengi", np.array([55, 85, 135])),
     ]
 
     def __init__(self, width: int = 1280, height: int = 720):
         self.width = width
         self.height = height
 
-        # Runtime feature toggles controllable from Stitch Web Dashboard
+        # Web panelinden anlık yönetilebilen akıllı modül anahtarları
         self.kvkk_dynamic_blur: bool = True
         self.heatmap_enabled: bool = False
         self.trajectory_prediction_enabled: bool = True
@@ -45,12 +47,12 @@ class SmartIntelligenceEngine:
         self.anti_spoofing_enabled: bool = True
         self.voice_tts_enabled: bool = True
 
-        # Spatial density heatmap accumulator (160x90 grid for fast real-time accumulation)
+        # Mekânsal yoğunluk ısı haritası biriktiricisi
         self.grid_w = 160
         self.grid_h = 90
         self.heatmap_acc = np.zeros((self.grid_h, self.grid_w), dtype=np.float32)
 
-        # Abandoned object state: bag_id -> {bbox, class_name, owner_id, unattended_since, first_seen}
+        # Terk edilmiş çanta takip durumu
         self.tracked_bags: Dict[int, Dict[str, Any]] = {}
         self.simulated_bag: Optional[Dict[str, Any]] = None
 
@@ -58,12 +60,12 @@ class SmartIntelligenceEngine:
         self.face_cascade = cv2.CascadeClassifier(cascade_path)
 
     # ==========================================================================
-    # 1. DYNAMIC KVKK PRIVACY FACE MASKING
+    # 1. DİNAMİK KVKK YÜZ MASKELEME
     # ==========================================================================
     def apply_dynamic_kvkk_masking(
         self, frame: np.ndarray, tracked_objects: List[Dict[str, Any]]
     ) -> int:
-        """Blur faces of NORMAL/IN_ROI persons; automatically unmask confirmed LOITERING suspects."""
+        """Normal kişilerin yüzünü pikselleştirerek gizler, yalnızca şüphelilerin yüzünü açar."""
         if not self.kvkk_dynamic_blur:
             return 0
 
@@ -72,13 +74,12 @@ class SmartIntelligenceEngine:
 
         for obj in tracked_objects:
             status = obj.get("behavior_status", "NORMAL")
-            if status == "LOITERING":
-                # Suspect is confirmed loitering -> UNMASK face for identification
+            if status in ("ŞÜPHELİ OYALANMA", "LOITERING"):
                 x1, y1, x2, y2 = [int(v) for v in obj["bbox"][:4]]
                 cv2.putText(
                     frame,
-                    "KVKK: SUPHELI YUZ ACIK",
-                    (x1, max(16, y1 - 46)),
+                    ascii_tr("KVKK: SUPHELI YUZ ACIK"),
+                    (x1, max(16, y1 - 48)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.46,
                     (0, 0, 255),
@@ -86,12 +87,10 @@ class SmartIntelligenceEngine:
                 )
                 continue
 
-            # Innocent / non-loitering person -> mask head/face region to protect biometric privacy
             x1, y1, x2, y2 = [int(v) for v in obj["bbox"][:4]]
             bw = max(10, x2 - x1)
             bh = max(20, y2 - y1)
 
-            # Head region is top 28% of full-body box or top 45% of closeup box
             head_ratio = 0.42 if bh > 260 else 0.28
             hx1 = max(0, int(x1 + bw * 0.12))
             hy1 = max(0, int(y1 + bh * 0.02))
@@ -100,7 +99,6 @@ class SmartIntelligenceEngine:
 
             if hx2 - hx1 > 8 and hy2 - hy1 > 8:
                 roi_head = frame[hy1:hy2, hx1:hx2]
-                # Pixelate + Gaussian blur for cybernetic KVKK anonymization aesthetic
                 small = cv2.resize(roi_head, (10, 10), interpolation=cv2.INTER_LINEAR)
                 pixelated = cv2.resize(
                     small, (hx2 - hx1, hy2 - hy1), interpolation=cv2.INTER_NEAREST
@@ -109,7 +107,7 @@ class SmartIntelligenceEngine:
                 cv2.rectangle(frame, (hx1, hy1), (hx2, hy2), (16, 185, 129), 1)
                 cv2.putText(
                     frame,
-                    "KVKK MASKED",
+                    "KVKK GIZLENDI",
                     (hx1, max(14, hy1 - 4)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.42,
@@ -121,7 +119,7 @@ class SmartIntelligenceEngine:
         return masked_count
 
     # ==========================================================================
-    # 2. KALMAN FUTURE TRAJECTORY PREDICTION & LIVE HEATMAP
+    # 2. KALMAN GELECEK YÖRÜNGE TAHMİNİ VE CANLI ISI HARİTASI
     # ==========================================================================
     def update_and_draw_heatmap_and_predictions(
         self,
@@ -129,11 +127,10 @@ class SmartIntelligenceEngine:
         tracked_objects: List[Dict[str, Any]],
         rois: List[Dict[str, Any]],
     ) -> List[str]:
-        """Update spatial density heatmap and draw 3-second Kalman future trajectory predictions."""
+        """Yoğunluk ısı haritasını günceller ve 3 saniyelik gelecek konum tahminini çizer."""
         pre_breach_warnings: List[str] = []
         h, w = frame.shape[:2]
 
-        # Decay heatmap slightly and add current centroids
         self.heatmap_acc *= 0.992
         for obj in tracked_objects:
             cx, cy = obj.get("centroid", (0, 0))
@@ -163,10 +160,10 @@ class SmartIntelligenceEngine:
                 else:
                     vx, vy = obj.get("velocity", (0.0, 0.0))
 
-                # Predict position 25 frames (~3 seconds) ahead
                 pred_x = int(np.clip(cx + vx * 25.0, 10, w - 10))
                 pred_y = int(np.clip(cy + vy * 25.0, 10, h - 10))
                 obj["predicted_point"] = (pred_x, pred_y)
+                obj["pre_breach"] = False
 
                 if math.hypot(pred_x - cx, pred_y - cy) > 18:
                     cv2.arrowedLine(
@@ -179,7 +176,6 @@ class SmartIntelligenceEngine:
                     )
                     cv2.circle(frame, (pred_x, pred_y), 6, (246, 215, 76), 1)
 
-                    # Check if person is currently outside ROI but predicted point enters ROI
                     if obj.get("behavior_status") == "NORMAL":
                         for roi in rois:
                             pts = np.array(roi["points"], np.int32)
@@ -187,11 +183,12 @@ class SmartIntelligenceEngine:
                                 cv2.pointPolygonTest(pts, (float(pred_x), float(pred_y)), False)
                                 >= 0
                             ):
-                                msg = f"PRE-BREACH: Track #{tid} -> {roi['name']} (3sn Tahmin)"
+                                obj["pre_breach"] = True
+                                msg = f"ERKEN İHLAL UYARISI: İz #{tid} -> {roi['name']} (3sn Tahmin)"
                                 pre_breach_warnings.append(msg)
                                 cv2.putText(
                                     frame,
-                                    msg,
+                                    ascii_tr(msg),
                                     (pred_x - 40, max(20, pred_y - 10)),
                                     cv2.FONT_HERSHEY_SIMPLEX,
                                     0.48,
@@ -202,15 +199,15 @@ class SmartIntelligenceEngine:
         return pre_breach_warnings
 
     # ==========================================================================
-    # 3. POSE SKELETON ESTIMATION & ACTION ANOMALY DETECTION
+    # 3. VÜCUT İSKELETİ VE POZ / EYLEM ANOMALİSİ TESPİTİ
     # ==========================================================================
     def analyze_and_draw_pose_actions(
         self, frame: np.ndarray, tracked_objects: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Estimate skeletal keypoints, classify posture/actions, and draw pose wireframe."""
+        """İskelet eklem noktalarını kestirir, vücut pozunu sınıflandırır ve çizer."""
         pose_alerts: List[Dict[str, Any]] = []
-
         frame_h = frame.shape[0]
+
         for obj in tracked_objects:
             x1, y1, x2, y2 = [int(v) for v in obj["bbox"][:4]]
             bw = max(12, x2 - x1)
@@ -223,21 +220,20 @@ class SmartIntelligenceEngine:
             aspect = bh / float(bw)
             is_closeup_webcam = (y2 >= frame_h - 20) or (bw > 240 and bh > 240)
 
-            # Classify posture & action state
             if aspect < 0.88 and bh < 210 and not is_closeup_webcam:
-                action_label = "FALL_DETECTED (ACIL DUSME!)"
+                action_label = "DÜŞME TESPİTİ (ACİL!)"
                 is_anomaly = True
             elif aspect < 1.35 and bh < 220 and not is_closeup_webcam:
-                action_label = "CROUCHING / SNEAKING (EGILME)"
+                action_label = "EĞİLME / SIZMA"
                 is_anomaly = True
             elif speed > 18.0:
-                action_label = "RAPID / AGGRESSIVE MOTION"
+                action_label = "HIZLI / AGRESİF HAREKET"
                 is_anomaly = True
             elif speed > 2.5:
-                action_label = "WALKING (YURUME)"
+                action_label = "YÜRÜME"
                 is_anomaly = False
             else:
-                action_label = "STANDING (BEKLEME)"
+                action_label = "BEKLEME"
                 is_anomaly = False
 
             obj["pose_action"] = action_label
@@ -251,7 +247,6 @@ class SmartIntelligenceEngine:
                 )
 
             if self.pose_estimation_enabled:
-                # Compute anatomical proportional skeleton keypoints inside person bbox
                 sway = int(math.sin(time.time() * 4.0 + tid) * min(8, int(speed * 1.5)))
                 head = (cx, int(y1 + bh * 0.12))
                 neck = (cx, int(y1 + bh * 0.22))
@@ -293,7 +288,7 @@ class SmartIntelligenceEngine:
 
                 cv2.putText(
                     frame,
-                    f"Poz: {action_label}",
+                    ascii_tr(f"Poz: {action_label}"),
                     (x1, min(frame.shape[0] - 6, y2 + 42)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.45,
@@ -304,20 +299,20 @@ class SmartIntelligenceEngine:
         return pose_alerts
 
     # ==========================================================================
-    # 4. ABANDONED OBJECT / LUGGAGE DETECTION
+    # 4. TERK EDİLMİŞ NESNE / ÇANTA TESPİTİ
     # ==========================================================================
     def trigger_simulated_abandoned_bag(self, frame_shape: Tuple[int, int] = (720, 1280)) -> None:
-        """Create a simulated unattended backpack inside Main_Entrance_ROI for interactive testing."""
+        """Etkileşimli test için Ana Giriş Bölgesi içinde sahipsiz sırt çantası senaryosu başlatır."""
         self.simulated_bag = {
             "bbox": [240, 460, 315, 555],
-            "class_name": "Backpack (Sırt Çantası)",
+            "class_name": "Sırt Çantası",
             "owner_id": 0,
             "unattended_since": time.time() - 6.5,
             "active": True,
         }
 
     def toggle_simulated_abandoned_bag(self) -> bool:
-        """Toggle simulated unattended backpack on/off for interactive Web Dashboard testing."""
+        """Terk edilmiş çanta test senaryosunu Web Paneli üzerinden açıp kapatır."""
         if self.simulated_bag and self.simulated_bag.get("active"):
             self.simulated_bag = None
             return False
@@ -331,7 +326,7 @@ class SmartIntelligenceEngine:
         tracked_objects: List[Dict[str, Any]],
         current_time: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
-        """Track bags, associate with nearest person Track ID, and alert when left unattended."""
+        """Çantaları takip eder, en yakın kişiyle eşleştirir ve sahipsiz kalınca alarm üretir."""
         if not self.abandoned_object_enabled:
             return []
 
@@ -347,7 +342,6 @@ class SmartIntelligenceEngine:
             bcx = (bx1 + bx2) // 2
             bcy = (by1 + by2) // 2
 
-            # Find closest tracked person
             min_dist = 9999.0
             nearest_tid = None
             for obj in tracked_objects:
@@ -379,11 +373,11 @@ class SmartIntelligenceEngine:
                     )
                 unattended_sec = max(0.0, now - bag_state["unattended_since"])
                 if unattended_sec >= 5.0:
-                    status_text = f"TERK EDILMIS NESNE: {bcls} ({unattended_sec:.1f}sn!)"
+                    status_text = f"TERK EDİLMİŞ NESNE: {bcls} ({unattended_sec:.1f}sn!)"
                     box_color = (0, 0, 255)
                     abandoned_alerts.append(
                         {
-                            "message": f"ALERT: Abandoned {bcls} (Owner ID:{bag_state['owner_id']}, {unattended_sec:.1f}s)",
+                            "message": f"ALARM: Terk Edilmiş {bcls} (Sahibi ID:{bag_state['owner_id']}, {unattended_sec:.1f}sn)",
                             "class_name": bcls,
                             "owner_track_id": bag_state["owner_id"],
                             "unattended_seconds": round(unattended_sec, 1),
@@ -398,7 +392,7 @@ class SmartIntelligenceEngine:
             cv2.rectangle(frame, (bx1, by1), (bx2, by2), box_color, 2)
             cv2.putText(
                 frame,
-                status_text,
+                ascii_tr(status_text),
                 (bx1, max(18, by1 - 8)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.52,
@@ -409,22 +403,19 @@ class SmartIntelligenceEngine:
         return abandoned_alerts
 
     # ==========================================================================
-    # 5. FACE ANTI-SPOOFING / LIVENESS CHECK
+    # 5. YÜZ CANLILIK VE SAHTECİLİK (ANTI-SPOOFING) DOĞRULAMASI
     # ==========================================================================
     def evaluate_face_liveness(self, aligned_face: np.ndarray) -> Dict[str, Any]:
-        """Analyze texture sharpness (Laplacian variance), specular glare, and color entropy."""
+        """Doku keskinliği (Laplacian), yansıma ve renk entropisiyle gerçek yüzü doğrular."""
         if aligned_face is None or aligned_face.size == 0:
             return {"liveness_score": 0.0, "is_live": False, "label": "BELİRSİZ"}
 
         gray = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2GRAY)
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
-        # Color channel entropy & saturation naturalness
         hsv = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2HSV)
         s_std = float(np.std(hsv[:, :, 1]))
         v_std = float(np.std(hsv[:, :, 2]))
-
-        # Screen glare check (excessive clipped white pixels)
         glare_ratio = float(np.mean(gray > 250))
 
         raw_score = (
@@ -441,14 +432,14 @@ class SmartIntelligenceEngine:
             "is_live": is_live,
             "label": f"GERÇEK CANLI YÜZ (%{int(score*100)})"
             if is_live
-            else f"SAHTE/EKRAN ŞÜPHESİ (%{int(score*100)})",
+            else f"SAHTE / EKRAN ŞÜPHESİ (%{int(score*100)})",
         }
 
     # ==========================================================================
-    # 6. GEMINI 3.8 FLASH VLM REASONING, VISUAL ATTRIBUTES & FORENSIC SEARCH
+    # 6. GEMINI 3.8 FLASH VLM, KIYAFET ÖZNİTELİKLERİ VE ADLİ METİN ARAMA
     # ==========================================================================
     def extract_clothing_attributes(self, crop_bgr: np.ndarray) -> Dict[str, str]:
-        """Identify dominant upper-body and lower-body clothing colors for forensic search."""
+        """Adli arama için kişinin üst ve alt giyim baskın renklerini çıkarır."""
         if crop_bgr is None or crop_bgr.size == 0:
             return {"upper_color": "Bilinmiyor", "lower_color": "Bilinmiyor"}
 
@@ -458,9 +449,9 @@ class SmartIntelligenceEngine:
 
         def _closest_color(patch: np.ndarray) -> str:
             if patch.size == 0:
-                return "Siyah (Black)"
+                return "Siyah"
             mean_bgr = np.mean(patch.reshape(-1, 3), axis=0)
-            best_name = "Siyah (Black)"
+            best_name = "Siyah"
             best_dist = 1e9
             for name, ref_bgr in self.COLOR_PALETTE_NAMES:
                 d = float(np.linalg.norm(mean_bgr - ref_bgr))
@@ -481,22 +472,22 @@ class SmartIntelligenceEngine:
         liveness_info: Dict[str, Any],
         clothing_info: Dict[str, str],
     ) -> str:
-        """Generate multimodal security assessment using Gemini 3.8 Flash (with fast local fallback)."""
+        """Gemini 3.8 Flash ile (veya hızlı yerel sentezle) Türkçe akıllı güvenlik raporu üretir."""
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if api_key:
             try:
                 from google import genai
+                import base64
 
                 client = genai.Client(api_key=api_key)
                 ok, buf = cv2.imencode(".jpg", crop_bgr)
                 if ok:
-                    import base64
-
                     b64_img = base64.b64encode(buf.tobytes()).decode("ascii")
                     prompt = (
                         f"Sen bir TÜBİTAK 2209-A akıllı güvenlik analistisin. Kamera: {event_meta.get('camera_id')}, "
                         f"Bölge: {event_meta.get('roi_name')}, Bekleme: {event_meta.get('dwell_time')}sn, "
-                        f"Yörünge Verimliliği: {event_meta.get('efficiency')}. "
+                        f"Yörünge Verimliliği: {event_meta.get('efficiency')}, "
+                        f"Risk Yüzdesi: %{event_meta.get('risk_percent', 0)}. "
                         "Görüntüdeki kişinin kıyafetini, duruşunu ve güvenlik riskini 1 kısa cümlede Türkçe özetle."
                     )
                     interaction = client.interactions.create(
@@ -511,30 +502,31 @@ class SmartIntelligenceEngine:
             except Exception:
                 pass
 
-        # Fast structured AI Behavioral & Visual Attribute synthesis
         upper = clothing_info.get("upper_color", "Koyu")
-        pose = event_meta.get("pose_action", "STANDING (BEKLEME)")
+        pose = event_meta.get("pose_action", "BEKLEME")
         live_lbl = liveness_info.get("label", "GERÇEK CANLI YÜZ")
         dwell = event_meta.get("dwell_time", 5.0)
         eff = event_meta.get("efficiency", 0.25)
+        risk_pct = event_meta.get("risk_percent", 0.0)
+        risk_tier = event_meta.get("risk_tier", "ORTA")
         is_hit = event_meta.get("watchlist_hit", False)
         bm = event_meta.get("best_match")
 
         if is_hit and bm:
             return (
-                f"AI Analizi: Üst giyim [{upper}] • Poz [{pose}] • {live_lbl} • "
-                f"{dwell}sn şüpheli oyalanma (Verim:{eff}) • Milvus Eşleşmesi: {bm['name']}"
+                f"YZ Analizi: Risk %{risk_pct} [{risk_tier}] • Üst Giyim [{upper}] • Poz [{pose}] • "
+                f"{live_lbl} • {dwell}sn şüpheli oyalanma (Verim:{eff}) • Milvus Eşleşmesi: {bm['name']}"
             )
         return (
-            f"AI Analizi: Üst giyim [{upper}] • Poz [{pose}] • {live_lbl} • "
-            f"{dwell}sn bölge içi bekleme (Verim:{eff}) • İzleme listesinde kaydı yok"
+            f"YZ Analizi: Risk %{risk_pct} [{risk_tier}] • Üst Giyim [{upper}] • Poz [{pose}] • "
+            f"{live_lbl} • {dwell}sn bölge içi bekleme (Verim:{eff}) • İzleme listesinde kaydı yok"
         )
 
     @staticmethod
     def search_events_by_query(
         events: List[Dict[str, Any]], query: str
     ) -> List[Dict[str, Any]]:
-        """Natural language forensic search across recorded security events."""
+        """Kayıtlı güvenlik olayları üzerinde doğal dilde adli arama yapar."""
         q = (query or "").strip().lower()
         if not q:
             return events
@@ -553,6 +545,8 @@ class SmartIntelligenceEngine:
                     str(ev.get("lower_clothing", "")),
                     str(ev.get("pose_action", "")),
                     str(ev.get("liveness_label", "")),
+                    str(ev.get("risk_tier", "")),
+                    str(ev.get("risk_percent", "")),
                     str((ev.get("best_match") or {}).get("name", "")),
                     str((ev.get("best_match") or {}).get("person_id", "")),
                     str((ev.get("best_match") or {}).get("risk_level", "")),
@@ -568,12 +562,13 @@ class SmartIntelligenceEngine:
         bot_token: Optional[str] = None,
         chat_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Send instant security alert to Telegram Bot if configured."""
+        """Yapılandırılmışsa Telegram botuna anlık güvenlik uyarısı gönderir."""
         token = (bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "")).strip()
         cid = (chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")).strip()
         text = (
-            f"🚨 *TÜBİTAK 2209-A Akıllı Güvenlik Uyarısı*\n"
+            f"🚨 *TÜBİTAK 2209-A Akıllı Güvenlik ve Alarm Bildirimi*\n"
             f"• *Olay:* `{event_record.get('event_id')}`\n"
+            f"• *Risk Oranı:* `%{event_record.get('risk_percent', 0)} ({event_record.get('risk_tier', 'YÜKSEK')})`\n"
             f"• *Bölge:* `{event_record.get('roi_name')}` ({event_record.get('dwell_time')} sn)\n"
             f"• *Analiz:* {event_record.get('behavior_summary')}"
         )
@@ -581,7 +576,7 @@ class SmartIntelligenceEngine:
             return {
                 "sent": False,
                 "simulated": True,
-                "message": "Telegram mesajı hazırlandı (TELEGRAM_BOT_TOKEN tanımlandığında canlı gönderilir)",
+                "message": "Telegram ihbar mesajı hazırlandı (TELEGRAM_BOT_TOKEN tanımlandığında canlı gönderilir)",
                 "preview": text,
             }
         try:
