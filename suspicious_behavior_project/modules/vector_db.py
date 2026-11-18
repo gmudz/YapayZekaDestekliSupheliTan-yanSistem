@@ -72,12 +72,22 @@ class MilvusWatchlistDB:
                 Collection,
             )
 
-            connections.connect(
-                alias="default",
-                host=self.host,
-                port=str(self.port),
-                timeout=3.0,
-            )
+            try:
+                connections.connect(
+                    alias="default",
+                    host=self.host,
+                    port=str(self.port),
+                    timeout=2.0,
+                )
+            except Exception:
+                # Try central WireGuard Cloud server (10.66.66.1:19530) if local Milvus is not running
+                connections.connect(
+                    alias="default",
+                    host="10.66.66.1",
+                    port=str(self.port),
+                    timeout=2.0,
+                )
+                self.host = "10.66.66.1"
 
             if not utility.has_collection(self.collection_name):
                 fields = [
