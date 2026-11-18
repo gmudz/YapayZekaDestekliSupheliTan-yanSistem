@@ -27,7 +27,7 @@ if [ ! -x "./venv/bin/python" ]; then
 fi
 
 # 2. Install dependencies if not yet installed
-if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5" >/dev/null 2>&1; then
+if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5; assert hasattr(cv2, 'VideoCapture')" >/dev/null 2>&1; then
     echo "[3/4] Gerekli yapay zeka ve bulut kütüphaneleri yükleniyor..."
     if command -v nvidia-smi >/dev/null 2>&1; then
         uv pip install --python ./venv/bin/python -r requirements.txt
@@ -38,8 +38,8 @@ if ! ./venv/bin/python -c "import torch, cv2, fastapi, pymilvus, yolov5" >/dev/n
             "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" -r requirements.txt || \
         uv pip install --python ./venv/bin/python -r requirements.txt
     fi
-    uv pip uninstall --python ./venv/bin/python opencv-python-headless opencv-contrib-python-headless 2>/dev/null || true
-    uv pip install --python ./venv/bin/python "setuptools>=68.0.0,<80.0.0" "opencv-python>=4.8.0,<5.0.0"
+    uv pip uninstall --python ./venv/bin/python opencv-python-headless opencv-contrib-python-headless opencv-python 2>/dev/null || true
+    uv pip install --python ./venv/bin/python --reinstall-package opencv-python "setuptools>=68.0.0,<80.0.0" "opencv-python>=4.8.0,<5.0.0"
 else
     echo "[3/4] Bağımlılıklar hazır ✅"
 fi
