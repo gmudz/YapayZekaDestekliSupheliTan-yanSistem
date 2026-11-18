@@ -218,6 +218,7 @@ class MilvusWatchlistDB:
                     ]
                 )
                 self.collection.flush()
+                self.collection.load()
             except Exception as e:
                 print(f"[MilvusWatchlistDB] Milvus insert warning: {e}")
 
