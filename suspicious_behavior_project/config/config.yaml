@@ -1,50 +1,121 @@
-# Video Analytics System Configuration
+# ==============================================================================
+# TÜBİTAK 2209-A: Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti
+# ve Adil Yüz Tanıma Sistemi — Sistem Yapılandırma Dosyası (config.yaml)
+# ==============================================================================
 
-# Camera Settings
+project:
+  title: "Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi"
+  program: "TÜBİTAK 2209-A"
+  author: "Murad Ashkar"
+  advisor: "Prof. Dr. Eyüp Burak Ceyhan"
+  institution: "Bartın Üniversitesi"
+
+# ------------------------------------------------------------------------------
+# 1. UÇ KATMANI (EDGE LAYER) — Kamera ve Video Akışı Ayarları
+# ------------------------------------------------------------------------------
 camera:
-  # Input source (0 for webcam, path for video file, RTSP URL for IP camera)
+  # Girdi kaynağı: 0 (Webcam), video dosya yolu ("data/demo_cctv.mp4") veya RTSP URL
+  # Eğer kamera (0) bulunamazsa sistem otomatik olarak gerçekçi CCTV test videosu üretir ve kullanır.
   source: 0
-  # Frame processing settings
+  fallback_video: "data/demo_cctv.mp4"
+  camera_id: "CAM-01-GIRIS"
+  # Çoklu akış (Hedef 1: En az 4 eşzamanlı 1080p akış >= 15 FPS)
+  multi_stream_sources:
+    - "data/demo_cctv.mp4"
+    - "data/demo_cctv.mp4"
+    - "data/demo_cctv.mp4"
+    - "data/demo_cctv.mp4"
   frame:
     width: 1280
     height: 720
     fps: 30
-    skip_frames: 1  # Process every nth frame
+    skip_frames: 1
 
-# YOLOv5 Model Settings
+# ------------------------------------------------------------------------------
+# 2. UÇ KATMANI — Kişi Tespiti (YOLOv5)
+# ------------------------------------------------------------------------------
 model:
   type: "yolov5"
-  # Model weights and architecture
   weights: "yolov5m.pt"
   architecture: "yolov5m"
-  # Inference settings
   confidence_threshold: 0.45
   iou_threshold: 0.45
-  # GPU settings
-  device: "cuda:0"
-  half_precision: true
+  device: "auto"          # "auto", "cuda:0", veya "cpu"
+  half_precision: false
+  input_size: 416         # Hız/doğruluk dengesi için çıkarım boyutu
 
-# DeepSORT Tracking Settings
+# ------------------------------------------------------------------------------
+# 3. UÇ KATMANI — Kişi Takibi (DeepSORT + Re-ID Görünüm Gömme)
+# ------------------------------------------------------------------------------
 tracking:
-  max_age: 30  # Maximum number of frames to keep track without detections
-  min_hits: 3  # Minimum number of frames to confirm a track
-  iou_threshold: 0.3
+  algorithm: "deepsort"
+  max_age: 30             # Tespit olmadan izi koruma süresi (kare sayısı)
+  min_hits: 2             # İzi onaylamak için gereken minimum ardışık tespit
+  iou_threshold: 0.25     # IoU eşleştirme eşiği
+  max_distance: 140.0     # Maksimum merkez/Kalman öklid mesafesi (piksel)
   appearance_model: "osnet_x0_25_msmt17"
-  feature_dim: 512
+  feature_dim: 512        # Re-ID görünüm vektör boyutu
+  appearance_weight: 0.45 # Görünüm (kosinüs) ve hareket (Kalman/IoU) ağırlığı
 
-# Loitering Analysis Settings
+# ------------------------------------------------------------------------------
+# 4. UÇ KATMANI — Şüpheli Davranış / Amaçsız Bekleme (Loitering) Analizi
+# ------------------------------------------------------------------------------
 loitering_analysis:
-  # Time thresholds
-  time_threshold_seconds: 180  # Minimum time in ROI to trigger alert
-  # Trajectory analysis
-  trajectory_efficiency_threshold: 0.3  # Threshold for loitering detection
-  # Regions of Interest
+  # (a) Zamansal Kriter: ROI içinde geçirilen minimum süre (saniye)
+  # TÜBİTAK üretim değeri: 180 sn; canlı test/demo modunda (--demo) 5 sn kullanılır
+  time_threshold_seconds: 180
+  demo_time_threshold_seconds: 5.0
+  # (b) Yörüngesel Kriter: Hareket Verimliliği = Net Yer Değiştirme / Toplam Yol Mesafesi
+  trajectory_efficiency_threshold: 0.30
+  min_path_points: 10
+  # İlgi Alanları (Polygonal ROIs - 1280x720 çözünürlüğe göre)
   regions_of_interest:
     - name: "Main_Entrance_ROI"
-      points: [[100, 150], [400, 150], [400, 450], [100, 450]]
+      points: [[80, 140], [560, 140], [560, 620], [80, 620]]
     - name: "Sensitive_Area_ROI"
-      points: [[500, 200], [700, 200], [700, 400], [500, 400]]
-  # Alert settings
+      points: [[660, 160], [1180, 160], [1180, 620], [660, 620]]
   alert:
-    cooldown: 300  # Minimum time (seconds) between alerts
-    threshold: 0.8  # Confidence threshold for alert
+    cooldown: 30          # Aynı kişi için tekrarlanan bulut aktarımı bekleme süresi (sn)
+    threshold: 0.80
+
+# ------------------------------------------------------------------------------
+# 5. KVKK VERİ MİNİMİZASYONU VE BULUT KATMANI (CLOUD LAYER)
+# ------------------------------------------------------------------------------
+cloud:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  api_url: "http://127.0.0.1:8000"
+  kvkk_privacy_mode: true          # Ham video asla dışarı çıkmaz; yalnızca şüpheli yüz kırpımı + meta veri aktarılır
+  blur_background_in_crops: false  # Kırpılan görüntü çevresini bulanıklaştırma
+
+# ------------------------------------------------------------------------------
+# 6. BULUT KATMANI — Adil Yüz Tanıma (ArcFace + FairFace Önyargı Azaltma)
+# ------------------------------------------------------------------------------
+face_recognition:
+  architecture: "ArcFace-R50-FairFace"
+  embedding_dim: 512
+  similarity_metric: "cosine"
+  match_threshold: 0.52            # FAR=0.001 (%0.1) güvenlik eşiği
+  fairness_calibration: true       # FairFace demografik grup dengeleme (Hedef 4)
+  demographic_groups:
+    - "Middle_Eastern"
+    - "White"
+    - "Black"
+    - "East_Asian"
+    - "Southeast_Asian"
+    - "Indian"
+    - "Latino_Hispanic"
+
+# ------------------------------------------------------------------------------
+# 7. BULUT KATMANI — Milvus Vektör Veritabanı (İzleme Listesi / Watchlist)
+# ------------------------------------------------------------------------------
+milvus:
+  host: "127.0.0.1"
+  port: 19530
+  collection_name: "tubitak_watchlist_faces"
+  embedding_dim: 512
+  metric_type: "COSINE"
+  index_type: "IVF_FLAT"
+  nlist: 128
+  local_fallback_path: "data/watchlist_store.json"

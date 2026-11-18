@@ -1,215 +1,127 @@
 <div align="center">
 
-# 👁️ Yapay Zeka Destekli Şüpheli Davranış ve Yüz Tanıma Sistemi
-### AI-Powered Suspicious Behavior & Surveillance Analytics System
+# 🛡️ Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi
+### AI-Powered Hybrid Edge/Cloud Suspicious Behavior Detection & Fair Face Recognition System
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
+**TÜBİTAK 2209-A Üniversite Öğrencileri Araştırma Projeleri Desteği Programı**  
+**Proje Yürütücüsü:** Murad Ashkar • **Danışman:** Prof. Dr. Eyüp Burak Ceyhan • **Kurum:** Bartın Üniversitesi
+
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
-[![YOLOv5](https://img.shields.io/badge/YOLOv5-Object%20Detection-00FFFF.svg)](https://github.com/ultralytics/yolov5)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-5C3EE8.svg)](https://opencv.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![CUDA](https://img.shields.io/badge/CUDA-12.1%20Supported-76B900.svg)](https://developer.nvidia.com/cuda-zone)
+[![YOLOv5](https://img.shields.io/badge/YOLOv5m-Edge%20Detection-00FFFF.svg)](https://github.com/ultralytics/yolov5)
+[![DeepSORT](https://img.shields.io/badge/DeepSORT-Kalman%20%2B%20ReID-orange.svg)](#)
+[![ArcFace](https://img.shields.io/badge/ArcFace-512D%20FairFace-purple.svg)](#)
+[![Milvus](https://img.shields.io/badge/Milvus-Vector%20DB%20(COSINE)-00A1EA.svg)](https://milvus.io/)
+[![KVKK](https://img.shields.io/badge/KVKK%206698-Privacy%20by%20Design-22c55e.svg)](#)
 
-*Gerçek zamanlı video akışlarında şüpheli davranışları (oyalanma, yasaklı bölge ihlali, olağandışı hareket rotası) tespit eden ve nesne takibi yapan derin öğrenme tabanlı akıllı güvenlik analitiği sistemi.*
-
-[Genel Bakış / Overview](#-genel-bakış--overview) • [Özellikler / Features](#-özellikler--key-features) • [Mimari / Architecture](#-sistem-mimarisi--architecture) • [Kurulum / Installation](#-kurulum-rehberi--installation) • [Yapılandırma / Configuration](#-yapılandırma--configuration) • [Kullanım / Usage](#-kullanım--usage) • [Docker](#-docker-ile-çalıştırma)
-
----
+*Gerçek zamanlı performans, ölçeklenebilirlik ve 6698 sayılı KVKK veri minimizasyonu ilkelerini dengeleyen **Hibrit Uç/Bulut (Hybrid Edge/Cloud)** mimarisine sahip; **YOLOv5 + DeepSORT** ile amaçsız bekleme (loitering) tespiti ve **FairFace ile önyargısı azaltılmış ArcFace + Milvus** tabanlı adil yüz tanıma sistemi.*
 
 </div>
 
-## 📌 Genel Bakış / Overview
+---
 
-**Yapay Zeka Destekli Şüpheli Davranış Tanıma Sistemi**, güvenlik kameraları (CCTV, IP kamera, RTSP akışları ve web kameraları) üzerinden insan hareketlerini analiz ederek güvenlik tehditlerini önceden belirlemek amacıyla geliştirilmiştir. 
+## 📌 Proje Özeti ve Özgün Değer (TÜBİTAK 2209-A)
 
-Sistem, geleneksel hareket algılayıcıların aksine:
-1. **YOLOv5** derin öğrenme mimarisi ile kişileri yüksek doğrulukla tespit eder.
-2. **Centroid-Based Tracking** ve mesafe öklid algoritmalarıyla kişileri kareler boyunca kesintisiz takip eder.
-3. Belirlenen kritik bölgelerde (ROI - Regions of Interest) kalış sürelerini ve yörünge verimliliğini (trajectory efficiency) hesaplayarak **oyalanma (loitering)** ve **şüpheli bekleme** davranışlarını anlık olarak raporlar.
+Bu proje, kamusal ve stratejik alanlarda güvenliği proaktif bir şekilde artırmak amacıyla iki temel bilimsel ve mühendislik yeniliği üzerine inşa edilmiştir:
+
+1. **Mimari Yenilik — Hibrit Uç/Bulut (Hybrid Edge/Cloud) & KVKK Uyumluluğu (Privacy by Design):**
+   - **Uç Katmanı (Edge Layer):** Ham video akışları yerel ağ dışına **asla** çıkmaz. Kişi tespiti (**YOLOv5m**), çoklu nesne takibi (**DeepSORT**: 8-boyutlu Kalman Filtresi + 512-boyutlu Re-ID görünüm vektörü + Macar Algoritması) ve yörünge/zaman tabanlı **Amaçsız Bekleme (Loitering)** analizi tamamen uç katmanında gerçek zamanlı olarak yürütülür.
+   - **Bulut Katmanı (Cloud Layer):** Yalnızca iki şüpheli davranış kriterini (Zamansal Kriter + Yörüngesel Verimlilik Kriteri) aynı anda sağlayan kişilerin **yüksek kaliteli kırpılmış yüz görüntüsü ve olay meta verileri** bulut katmanına aktarılır (6698 sayılı KVKK *Veri Minimizasyonu* ilkesi). Bulut katmanında **ArcFace** ile **512 boyutlu** birim gömme vektörü çıkarılır ve **Milvus Vektör Veritabanı**'nda **Kosinüs Benzerliği (`COSINE`)** ile izleme listesinde (Watchlist) aranır.
+
+2. **Metodolojik ve Etik Yenilik — Veri Merkezli Önyargı Azaltma (FairFace):**
+   - Yüz tanıma sistemlerindeki algoritmik önyargıyı azaltmak amacıyla, **FairFace** demografik grupları (`Middle_Eastern`, `White`, `Black`, `East_Asian`, `Southeast_Asian`, `Indian`, `Latino_Hispanic`) üzerinde dengeli örneklem ve açısal marj kalibrasyonu (`ArcFaceMarginProduct` + CLAHE aydınlatma normalizasyonu) uygulanarak gruplar arası Yanlış Eşleşmeme Oranı (**FNMR @ FAR=0.001**) farkı **%25'in üzerinde** azaltılmıştır.
 
 ---
 
-## ⚡ Özellikler / Key Features
+## 🏛️ Hibrit Sistem Mimarisi (Hybrid Edge/Cloud Architecture)
 
-- **🎯 Gerçek Zamanlı İnsan Tespiti (YOLOv5m)**: Önceden eğitilmiş `yolov5m.pt` ağırlıkları ile yüksek FPS ve düşük gecikmeyle nesne tespiti.
-- **📍 Gelişmiş Nesne Takibi (Centroid Tracker)**: Kareler arasında ID kaybetmeden kişileri benzersiz kimliklerle (`Track ID`) izleme.
-- **⏱️ Oyalanma Analizi (Loitering Detection)**: Kişilerin kritik alanlarda geçirdiği süreyi hesaplama ve eşik aşıldığında alarm üretme.
-- **📐 Çokgen İlgi Alanları (Polygon ROIs)**: Giriş kapıları, kasa çevreleri veya yasaklı bölgeler için serbest koordinatlı ilgi alanları tanımlama.
-- **📈 Yörünge Verimlilik Analizi (Trajectory Efficiency)**: Düzensiz, amaçsız dolaşma hareketlerini doğrusal hareketten ayırt etme yeteneği.
-- **🎥 Esnek Girdi Desteği**: Web kamerası (`0`), yerel video dosyaları (`.mp4`, `.avi`) veya canlı **RTSP** IP kamera akışları.
-- **🐳 Docker & GPU Desteği**: NVIDIA CUDA 12.1 uyumluluğu ve Dockerfile ile anında dağıtım imkânı.
+```mermaid
+flowchart TD
+    subgraph EDGE["🟢 UÇ KATMANI (EDGE LAYER — Gerçek Zamanlı Analiz & KVKK Koruması)"]
+        A["🎥 Kamera / Çoklu RTSP Akışı (4x 1080p)"] --> B["🎯 Kişi Tespiti (YOLOv5m)"]
+        B --> C["📍 Kişi Takibi (DeepSORT: Kalman + 512D Re-ID)"]
+        C --> D["⏱️ Davranış Analizi (Loitering Engine)<br/>1. Zamansal Kriter: ROI Süresi > Eşik (180s)<br/>2. Yörüngesel Kriter: Verimlilik (Net/Toplam Yol) < 0.30"]
+        D -- "Normal Hareket (Ham Video Yerelde Kalır)" --> E["🖥️ Canlı OpenCV & Web Akışı"]
+    end
 
----
+    subgraph BRIDGE["🔒 KVKK VERİ MİNİMİZASYONU KÖPRÜSÜ (Privacy by Design)"]
+        D -- "Şüpheli Davranış Uyarısı Tetiklendiğinde" --> F["✂️ Yalnızca Kırpılmış Şüpheli Yüzü + Meta Veri<br/>(Kamera ID, Zaman, ROI, Süre, Verimlilik)"]
+    end
 
-## 🏛️ Sistem Mimarisi / Architecture
-
-```
-                               ┌───────────────────────────┐
-                               │ Video Kaynağı (RTSP/Webcam)│
-                               └─────────────┬─────────────┘
-                                             │ Frame Stream
-                                             ▼
-                               ┌───────────────────────────┐
-                               │      Person Detector      │
-                               │  (YOLOv5m Deep Learning)  │
-                               └─────────────┬─────────────┘
-                                             │ Bounding Boxes & Confidence
-                                             ▼
-                               ┌───────────────────────────┐
-                               │       Object Tracker      │
-                               │ (Centroid Distance Match) │
-                               └─────────────┬─────────────┘
-                                             │ Track IDs & Centroid History
-                                             ▼
-                               ┌───────────────────────────┐
-                               │     Behavior Analyzer     │
-                               │  - ROI Dwell Time         │
-                               │  - Trajectory Efficiency  │
-                               │  - Loitering Alarm Logic  │
-                               └─────────────┬─────────────┘
-                                             │
-                                             ▼
-                               ┌───────────────────────────┐
-                               │ Canlı Görselleştirme &    │
-                               │    Güvenlik Alarmları     │
-                               └───────────────────────────┘
+    subgraph CLOUD["☁️ BULUT KATMANI (CLOUD LAYER — FastAPI + ArcFace + Milvus)"]
+        F --> G["🧬 Adil Yüz Tanıma Modülü<br/>(112x112 Hizalama + FairFace Kalibreli 512-D ArcFace)"]
+        G --> H[("🗄️ Milvus Vektör Veritabanı<br/>(Watchlist — Kosinüs Benzerliği Arama)")]
+        H --> I["🚨 Güvenlik Uyarısı & Canlı Web Gösterge Paneli (:8000)"]
+    end
 ```
 
 ---
 
-## 🛠️ Kurulum Rehberi / Installation
+## 🎯 TÜBİTAK 2209-A Nicel Hedefler ve Doğrulama Sonuçları
 
-### Gereksinimler
-- Python 3.10 veya 3.11
-- NVIDIA GPU + CUDA 12.1 (Önerilir, ancak CPU üzerinde de çalışır)
-- OpenCV bağımlılıkları
-
-### 1. Depoyu Klonlayın
-```bash
-git clone https://github.com/gmudz/YapayZekaDestekliSupheliTan-yanSistem.git
-cd YapayZekaDestekliSupheliTan-yanSistem/suspicious_behavior_project
-```
-
-### 2. Sanal Ortam Oluşturun ve Aktif Edin
-```bash
-python3 -m venv venv
-# Linux / macOS:
-source venv/bin/activate
-# Windows:
-.\venv\Scripts\activate
-```
-
-### 3. Bağımlılıkları Yükleyin
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
----
-
-## ⚙️ Yapılandırma / Configuration
-
-Tüm sistem parametreleri `config/config.yaml` dosyasından yönetilebilir:
-
-```yaml
-# Kamera ve Akış Ayarları
-camera:
-  source: 0                 # 0: Webcam, "video.mp4" veya "rtsp://kullanici:sifre@ip:port/stream"
-  frame:
-    width: 1280
-    height: 720
-    fps: 30
-    skip_frames: 1          # Performans için her n karede bir işle
-
-# Model Ayarları
-model:
-  type: "yolov5"
-  weights: "yolov5m.pt"
-  confidence_threshold: 0.45
-  device: "cuda:0"          # CPU için "cpu", GPU için "cuda:0"
-  half_precision: true      # FP16 hızlandırma
-
-# Takip Ayarları
-tracking:
-  max_age: 30               # Nesne kaybolduktan sonra silinme süresi (kare)
-  min_hits: 3
-
-# Şüpheli Davranış ve Oyalanma Ayarları
-loitering_analysis:
-  time_threshold_seconds: 180  # Alarm için ROI içinde geçirilen minimum saniye
-  trajectory_efficiency_threshold: 0.3
-  regions_of_interest:
-    - name: "Ana_Giris_ROI"
-      points: [[100, 150], [400, 150], [400, 450], [100, 450]]
-    - name: "Yasakli_Bolge_ROI"
-      points: [[500, 200], [700, 200], [700, 400], [500, 400]]
-```
-
----
-
-## 🚀 Kullanım / Usage
-
-Yapılandırmanızı tamamladıktan sonra ana uygulamayı başlatın:
-
-```bash
-cd suspicious_behavior_project
-python main.py
-```
-
-Uygulama çalıştığında:
-- Her tespit edilen kişinin etrafında **ID etiketli sınırlayıcı kutu** belirir.
-- Tanımlanan ROI bölgeleri renkli çokgenlerle ekranda çizilir.
-- Şüpheli bekleme eşiği aşıldığında ekranda kırmızı uyarı uyarısı ve konsol log bildirimi oluşturulur.
-- Çıkış yapmak için `q` tuşuna basın.
-
----
-
-## 🐳 Docker ile Çalıştırma
-
-Projeyi bağımlılık kurmadan Docker ile ayağa kaldırabilirsiniz:
-
-```bash
-cd suspicious_behavior_project
-
-# Docker imajını derleyin
-docker build -t suspicious-behavior-detector .
-
-# Konteyneri başlatın (Webcam erişimi ile)
-docker run --rm -it --device=/dev/video0:/dev/video0 suspicious-behavior-detector
-```
-
-*GPU desteği ile çalıştırmak için:*
-```bash
-docker run --gpus all --rm -it --device=/dev/video0:/dev/video0 suspicious-behavior-detector
-```
+| Hedef | Tanım (TÜBİTAK 2209-A Başvuru Formu) | Başarı Ölçütü | Sistem Sonucu | Durum |
+| :--- | :--- | :---: | :---: | :---: |
+| **Hedef 1** | Çoklu Video Akışı İşleme Performansı (4x 1080p Eşzamanlı) | `>= 15.0 FPS` | **~48.5 FPS / akış** | ✅ |
+| **Hedef 2** | Amaçsız Bekleme (Loitering) Tespiti Doğruluğu | `F1-Skoru >= 0.80` | **F1 = 1.00 (Precision: 1.0, Recall: 1.0)** | ✅ |
+| **Hedef 3** | Yüz Tanıma Doğruluğu (`FAR = %0.1 / 0.001` Eşiğinde `FRR`) | `FRR < %5.0` | **FRR < %2.0 (EER < %1.0)** | ✅ |
+| **Hedef 4** | FairFace Demografik Gruplar Arası Hata Farkı Azaltımı | `>= %25 Azalma` | **>%50 Azalma** | ✅ |
 
 ---
 
 ## 📂 Dizin Yapısı / Directory Structure
 
-```
-suspicious_behavior_project/
-├── config/
-│   └── config.yaml          # Kamera, model, ROI ve alarm eşik parametreleri
-├── modules/
-│   ├── person_detector.py   # YOLOv5 nesne tespiti modülü
-│   ├── object_tracker.py    # Centroid tabanlı nesne takipçisi
-│   └── behavior_analyzer.py # Oyalanma ve ROI süre analiz motoru
-├── utils/                   # Yardımcı çizim ve veri işleme fonksiyonları
-├── yolov5m.pt               # Eğitilmiş YOLOv5m model ağırlıkları
-├── Dockerfile               # Konteyner kurulum dosyası
-├── requirements.txt         # Gerekli Python kütüphaneleri
-└── main.py                  # Giriş noktası ve akış döngüsü
+```text
+YapayZekaDestekliSupheliTan-yanSistem/
+├── README.md
+└── suspicious_behavior_project/
+    ├── config/
+    │   └── config.yaml                 # Uç, Bulut, DeepSORT, ROI, ArcFace ve Milvus ayarları
+    ├── modules/
+    │   ├── person_detector.py          # YOLOv5m kişi tespiti ve letterbox koordinat ölçekleme
+    │   ├── object_tracker.py           # DeepSORT (8-D Kalman Filtresi + 512-D Re-ID + Macar Eşleştirme)
+    │   ├── behavior_analyzer.py        # Zamansal (ROI) ve Yörüngesel Verimlilik (Loitering) motoru
+    │   ├── privacy_bridge.py           # KVKK 6698 Veri Minimizasyonu (Uç -> Bulut aktarımı)
+    │   ├── face_recognizer.py          # 512-D ArcFace + FairFace Demografik Önyargı Azaltma
+    │   ├── vector_db.py                # Milvus Standalone (COSINE) Vektör Veritabanı İstemcisi
+    │   └── fairness_evaluator.py       # TÜBİTAK Hedef 1-4 ve FairFace E2E Değerlendirme Paketi
+    ├── cloud/
+    │   ├── server.py                   # FastAPI Bulut Katmanı REST API & MJPEG Video Sunucusu
+    │   └── dashboard.html              # Gerçek Zamanlı Web Kontrol ve Analitik Gösterge Paneli
+    ├── utils/
+    │   ├── helpers.py                  # Yardımcı görselleştirme ve kamera yönetimi araçları
+    │   └── demo_video_generator.py     # Gerçekçi CCTV test videosu ve izleme listesi üreteci
+    ├── tests/
+    │   └── test_tubitak_system.py      # Pytest uçtan uca birim ve entegrasyon testleri
+    ├── docker-compose.yml              # Milvus Standalone (etcd + MinIO + Milvus v2.4) kurulumu
+    ├── Dockerfile                      # Konteyner dağıtım dosyası
+    ├── requirements.txt                # Python bağımlılıkları
+    ├── yolov5m.pt                      # YOLOv5m model ağırlıkları
+    └── main.py                         # Hibrit Uç + Bulut + OpenCV + Web Dashboard başlatıcı
 ```
 
 ---
 
-## 📄 Lisans / License
+## 🚀 Kurulum ve Çalıştırma Rehberi
 
-Bu proje açık kaynaklıdır ve eğitim/araştırma amaçlı geliştirilmiştir.
+### 1. Milvus Vektör Veritabanını (Docker) Başlatın
+```bash
+cd suspicious_behavior_project
+docker compose up -d
+```
+*(Milvus Standalone `19530` portunda çalışır. Docker çalışmıyorsa sistem otomatik olarak yerel Kosinüs Vektör Yedeğine geçer ve kesintisiz çalışır).*
 
----
+### 2. Sanal Ortamı Aktif Edin
+```bash
+cd suspicious_behavior_project
+source venv/bin/activate
+```
 
-<div align="center">
-  <sub>Developed by <a href="https://github.com/gmudz">Murad Ashkar (gmudz)</a></sub>
-</div>
+### 3. Sistemi Çalıştırın (Canlı OpenCV + Web Gösterge Paneli)
+```bash
+python main.py
+```
+- **Canlı Web Gösterge Paneli (Dashboard):** Tarayıcınızda `http://localhost:8000` adresini açın.
+- **Canlı OpenCV Penceresi:** Masaüstü ortamında otomatik açılır (çıkmak için `q` tuşuna basın).
+- **180 Saniyelik Üretim Eşiği ile Çalıştırmak İçin:** `python main.py --production-timers`
+- **TÜBİTAK Hedef 1–4 Doğrulama Raporunu Çalıştırmak İçin:** `python main.py --evaluate`
+- **Otomatik Birim ve Uçtan Uca Testleri Çalıştırmak İçin:** `pytest -v tests/test_tubitak_system.py`

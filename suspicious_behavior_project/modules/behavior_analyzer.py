@@ -1,129 +1,235 @@
-"""Module for analyzing behavior patterns in video frames.
+"""Module for analyzing behavior patterns in video frames (Edge Layer — TÜBİTAK 2209-A).
 
-This module provides a BehaviorAnalyzer class that implements loitering
-detection based on time spent in regions of interest and trajectory analysis.
+Implements the dual-criterion Suspicious Behavior (Loitering / Amaçsız Bekleme) algorithm:
+1. Temporal Criterion (Zamansal Kriter): Time spent inside a polygonal Region of Interest (ROI)
+   exceeds time_threshold_seconds (180s standard, configurable for live demos).
+2. Trajectory Criterion (Yörüngesel Kriter): Movement Efficiency =
+   (Net Displacement / Total Path Distance) < trajectory_efficiency_threshold (0.30).
 """
 
 import time
 from collections import defaultdict
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Optional, Any
+
 
 class BehaviorAnalyzer:
-    """Class for analyzing suspicious behaviors, specifically loitering detection.
-    
+    """Analyzes person trajectories and ROI dwell times for loitering detection.
+
     Args:
-        config (dict): Configuration dictionary containing:
-            - time_threshold_seconds: Minimum time in ROI to trigger alert
-            - trajectory_efficiency_threshold: Minimum efficiency threshold for loitering
-            - regions_of_interest: List of ROI definitions
+        config: Configuration dictionary under 'loitering_analysis'
+        demo_mode: If True, uses demo_time_threshold_seconds (e.g. 5s) instead of 180s
     """
-    
-    def __init__(self, config: dict):
-        """Initialize BehaviorAnalyzer with configuration."""
-        self.rois = config['regions_of_interest']
-        self.time_threshold = config['time_threshold_seconds']
-        self.efficiency_threshold = config['trajectory_efficiency_threshold']
-        
-        # Track history and ROI time tracking
-        self.track_history = defaultdict(list)
-        self.time_in_roi = defaultdict(lambda: {'start_time': None, 'total_time': 0})
-        self.alerts = {}
-        
-    def is_inside_roi(self, point: tuple, roi_name: str) -> bool:
-        """Check if a point is inside a specific ROI.
-        
-        Args:
-            point (tuple): (x, y) coordinates
-            roi_name (str): Name of the ROI to check
-            
-        Returns:
-            bool: True if point is inside ROI, False otherwise
-        """
+
+    def __init__(self, config: dict, demo_mode: bool = False):
+        self.config = config
+        self.rois = config.get("regions_of_interest", [])
+        if demo_mode and "demo_time_threshold_seconds" in config:
+            self.time_threshold = float(config["demo_time_threshold_seconds"])
+        else:
+            self.time_threshold = float(config.get("time_threshold_seconds", 180.0))
+
+        self.efficiency_threshold = float(
+            config.get("trajectory_efficiency_threshold", 0.30)
+        )
+        self.min_path_points = int(config.get("min_path_points", 10))
+        alert_cfg = config.get("alert", {})
+        self.cooldown_seconds = float(alert_cfg.get("cooldown", 30.0))
+
+        # Per-track state
+        self.track_history: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
+        self.time_in_roi: Dict[int, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "start_time": None,
+                "roi_name": None,
+                "elapsed": 0.0,
+                "efficiency": 1.0,
+                "net_displacement": 0.0,
+                "total_distance": 0.0,
+                "status": "NORMAL",
+            }
+        )
+        self.alerts: Dict[int, Dict[str, Any]] = {}
+        self.last_cloud_dispatch: Dict[int, float] = {}
+
+    def is_inside_roi(self, point: Tuple[int, int], roi_name: str) -> bool:
+        """Check if (x, y) point is inside the named polygonal ROI."""
         for roi in self.rois:
-            if roi['name'] == roi_name:
-                pts = np.array(roi['points'], np.int32)
-                return cv2.pointPolygonTest(pts, point, False) >= 0
+            if roi["name"] == roi_name:
+                pts = np.array(roi["points"], np.int32)
+                return (
+                    cv2.pointPolygonTest(pts, (float(point[0]), float(point[1])), False)
+                    >= 0
+                )
         return False
 
-    def update(self, tracks: List[Dict[str, any]]) -> List[str]:
-        """Update behavior analysis with new tracked objects.
-        
-        Args:
-            tracks: List of tracked objects with format:
-            [{'id': int, 'bbox': [xmin, ymin, xmax, ymax]}]
-            
-        Returns:
-            List[str]: List of generated alerts
+    @staticmethod
+    def compute_trajectory_metrics(
+        path: List[Tuple[int, int]]
+    ) -> Tuple[float, float, float]:
+        """Compute (efficiency, net_displacement, total_distance) for a trajectory path.
+
+        Formula (TÜBİTAK Section 2 - Davranış Analizi):
+            Efficiency = Net Displacement / Total Path Distance
+        Also accounts for stationary loitering (standing still inside ROI with near-zero path).
         """
-        current_alerts = []
-        current_time = time.time()
-        
+        if len(path) < 2:
+            return 1.0, 0.0, 0.0
+
+        pts = np.array(path, dtype=np.float64)
+        start_point = pts[0]
+        end_point = pts[-1]
+
+        net_displacement = float(np.linalg.norm(end_point - start_point))
+        diffs = pts[1:] - pts[:-1]
+        segment_lengths = np.linalg.norm(diffs, axis=1)
+        total_distance = float(np.sum(segment_lengths))
+
+        if total_distance < 15.0:
+            # Stationary person inside ROI -> very low movement efficiency
+            efficiency = min(0.05, net_displacement / 100.0)
+        else:
+            raw_efficiency = net_displacement / (total_distance + 1e-6)
+            # If net displacement across a long observation window is tiny (<35 px),
+            # cap efficiency so stationary jitter is recognized as loitering.
+            if net_displacement < 35.0 and len(path) >= 10:
+                efficiency = min(raw_efficiency, net_displacement / 150.0)
+            else:
+                efficiency = raw_efficiency
+
+        return float(np.clip(efficiency, 0.0, 1.0)), net_displacement, total_distance
+
+    def update(
+        self,
+        tracks: List[Dict[str, Any]],
+        current_timestamp: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Update behavior analysis with current tracked objects.
+
+        Args:
+            tracks: List of tracked person dicts [{'track_id': int, 'bbox': [x1, y1, x2, y2], ...}]
+            current_timestamp: Optional override timestamp (useful for deterministic unit tests/benchmarks)
+
+        Returns:
+            List of alert dictionaries, each containing 'message', 'track_id', 'roi_name',
+            'dwell_time', 'efficiency', 'bbox', 'timestamp', 'should_send_to_cloud'.
+        """
+        current_alerts: List[Dict[str, Any]] = []
+        now = current_timestamp if current_timestamp is not None else time.time()
+
+        active_ids = set()
         for track in tracks:
-            track_id = track['track_id']
-            bbox = track['bbox']
+            track_id = track.get("track_id", track.get("id", 0))
+            active_ids.add(track_id)
+            bbox = track["bbox"]
             centroid = (int((bbox[0] + bbox[2]) / 2), int((bbox[1] + bbox[3]) / 2))
-            
-            # Update track history
+
+            # Maintain trajectory history inside ROI
             self.track_history[track_id].append(centroid)
-            
-            # Check time in ROI
-            in_any_roi = False
+            if len(self.track_history[track_id]) > 600:
+                self.track_history[track_id] = self.track_history[track_id][-600:]
+
+            matched_roi = None
             for roi in self.rois:
-                if self.is_inside_roi(centroid, roi['name']):
-                    in_any_roi = True
-                    
-                    # Start timing if not already started
-                    if self.time_in_roi[track_id]['start_time'] is None:
-                        self.time_in_roi[track_id]['start_time'] = current_time
-                    else:
-                        # Calculate elapsed time
-                        elapsed = current_time - self.time_in_roi[track_id]['start_time']
-                        
-                        # Check if time threshold is exceeded
-                        if elapsed > self.time_threshold:
-                            # Analyze trajectory efficiency
-                            path = self.track_history[track_id]
-                            if len(path) > 10:  # Minimum path length for analysis
-                                start_point = np.array(path[0])
-                                end_point = np.array(path[-1])
-                                
-                                # Calculate net displacement and total distance
-                                net_displacement = np.linalg.norm(end_point - start_point)
-                                total_distance = sum(
-                                    np.linalg.norm(np.array(path[i]) - np.array(path[i-1]))
-                                    for i in range(1, len(path))
-                                )
-                                
-                                # Calculate efficiency
-                                efficiency = net_displacement / (total_distance + 1e-6)
-                                
-                                # Check if loitering is detected
-                                if efficiency < self.efficiency_threshold:
-                                    if track_id not in self.alerts:
-                                        alert_msg = f"ALERT: Person ID {track_id} is loitering in {roi['name']}"
-                                        current_alerts.append(alert_msg)
-                                        self.alerts[track_id] = alert_msg
+                if self.is_inside_roi(centroid, roi["name"]):
+                    matched_roi = roi["name"]
                     break
-            
-            # Reset tracking if person leaves all ROIs
-            if not in_any_roi:
-                self.time_in_roi[track_id]['start_time'] = None
-                if track_id in self.alerts:
-                    del self.alerts[track_id]
-        
+
+            state = self.time_in_roi[track_id]
+            if matched_roi is not None:
+                if state["start_time"] is None or state["roi_name"] != matched_roi:
+                    state["start_time"] = now
+                    state["roi_name"] = matched_roi
+                    self.track_history[track_id] = [centroid]
+
+                elapsed = max(0.0, now - state["start_time"])
+                path = self.track_history[track_id]
+                efficiency, net_disp, total_dist = self.compute_trajectory_metrics(path)
+
+                state["elapsed"] = elapsed
+                state["efficiency"] = efficiency
+                state["net_displacement"] = net_disp
+                state["total_distance"] = total_dist
+
+                # Check Dual Criteria:
+                # (a) Temporal: elapsed > time_threshold
+                # (b) Trajectory: efficiency < efficiency_threshold (with >= min_path_points)
+                if (
+                    elapsed >= self.time_threshold
+                    and len(path) >= self.min_path_points
+                    and efficiency < self.efficiency_threshold
+                ):
+                    state["status"] = "LOITERING"
+                    alert_msg = (
+                        f"ALERT: Person ID {track_id} loitering in {matched_roi} "
+                        f"({elapsed:.1f}s, Eff={efficiency:.2f})"
+                    )
+
+                    last_sent = self.last_cloud_dispatch.get(track_id, 0.0)
+                    should_send_cloud = (now - last_sent) >= self.cooldown_seconds
+                    if should_send_cloud:
+                        self.last_cloud_dispatch[track_id] = now
+
+                    alert_obj = {
+                        "message": alert_msg,
+                        "track_id": track_id,
+                        "roi_name": matched_roi,
+                        "dwell_time": round(elapsed, 2),
+                        "efficiency": round(efficiency, 3),
+                        "net_displacement": round(net_disp, 1),
+                        "total_distance": round(total_dist, 1),
+                        "bbox": list(bbox),
+                        "centroid": centroid,
+                        "timestamp": now,
+                        "should_send_to_cloud": should_send_cloud,
+                    }
+                    self.alerts[track_id] = alert_obj
+                    current_alerts.append(alert_obj)
+                else:
+                    state["status"] = "IN_ROI"
+            else:
+                # Person is outside all ROIs
+                state["start_time"] = None
+                state["roi_name"] = None
+                state["elapsed"] = 0.0
+                state["status"] = "NORMAL"
+                self.alerts.pop(track_id, None)
+
+            # Enrich track dict in-place so UI / OpenCV renderer can show live metrics
+            track["roi_name"] = state["roi_name"]
+            track["dwell_time"] = round(state["elapsed"], 1)
+            track["efficiency"] = round(state["efficiency"], 2)
+            track["behavior_status"] = state["status"]
+
         return current_alerts
 
     def draw_roi(self, frame: np.ndarray) -> None:
-        """Draw ROIs on the frame.
-        
-        Args:
-            frame: Input frame to draw on
-        """
+        """Draw polygonal ROIs and their active status on the frame."""
+        overlay = frame.copy()
+        alert_rois = {a["roi_name"] for a in self.alerts.values()}
+
         for roi in self.rois:
-            pts = np.array(roi['points'], np.int32).reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], isClosed=True, color=(255, 0, 0), thickness=2)
-            cv2.putText(frame, roi['name'], 
-                       (pts[0][0][0], pts[0][0][1] - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            name = roi["name"]
+            pts = np.array(roi["points"], np.int32).reshape((-1, 1, 2))
+            is_alerting = name in alert_rois
+
+            fill_color = (0, 0, 180) if is_alerting else (180, 90, 0)
+            border_color = (0, 0, 255) if is_alerting else (255, 140, 0)
+
+            cv2.fillPoly(overlay, [pts], fill_color)
+            cv2.polylines(frame, [pts], isClosed=True, color=border_color, thickness=2)
+
+            label = f"{name} [{'ALERT!' if is_alerting else f'Limit: {self.time_threshold:.0f}s'}]"
+            lx, ly = int(pts[0][0][0]), max(22, int(pts[0][0][1]) - 10)
+            cv2.putText(
+                frame,
+                label,
+                (lx, ly),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                border_color,
+                2,
+            )
+
+        cv2.addWeighted(overlay, 0.15, frame, 0.85, 0, frame)

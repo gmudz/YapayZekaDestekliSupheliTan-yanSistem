@@ -1,7 +1,21 @@
-"""Package for core modules of the suspicious behavior detection system.
+"""Core modules for TÜBİTAK 2209-A Hybrid Edge/Cloud Surveillance & Fair Face Recognition System."""
 
-This package contains the main implementation modules:
-- person_detector: Person detection using YOLOv5
-- object_tracker: Object tracking using centroid-based tracking
-- behavior_analyzer: Behavior analysis for loitering detection
-"""
+from modules.person_detector import PersonDetector
+from modules.object_tracker import ObjectTracker, DeepSORTTracker
+from modules.behavior_analyzer import BehaviorAnalyzer
+from modules.face_recognizer import FairFaceRecognizer, ArcFaceMarginProduct
+from modules.vector_db import MilvusWatchlistDB
+from modules.privacy_bridge import KVKKPrivacyBridge
+from modules.fairness_evaluator import TubitakEvaluationSuite
+
+__all__ = [
+    "PersonDetector",
+    "ObjectTracker",
+    "DeepSORTTracker",
+    "BehaviorAnalyzer",
+    "FairFaceRecognizer",
+    "ArcFaceMarginProduct",
+    "MilvusWatchlistDB",
+    "KVKKPrivacyBridge",
+    "TubitakEvaluationSuite",
+]

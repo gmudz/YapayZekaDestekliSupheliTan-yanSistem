@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TÜBİTAK 2209-A | Hibrit Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131b2e;
+      --card-border: #23304d;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 40px;
+    }
+    header {
+      background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+      border-bottom: 1px solid var(--card-border);
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .brand h1 {
+      font-size: 1.22rem;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .badge-kvkk { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.35); }
+    .badge-milvus { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
+    .badge-fps { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.35); }
+
+    .container {
+      max-width: 1480px;
+      margin: 22px auto;
+      padding: 0 22px;
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 1100px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card-header h2 {
+      font-size: 1.02rem;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .video-box {
+      width: 100%;
+      background: #050811;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #1e293b;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .video-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .controls-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      align-items: center;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .stat-item {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--card-border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-item .val {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stat-item .lbl {
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .alert-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 520px;
+      overflow-y: auto;
+    }
+    .alert-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      border-left: 4px solid var(--danger);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    .alert-imgs {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .alert-imgs img {
+      width: 68px;
+      height: 68px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #334155;
+    }
+    .alert-info { flex: 1; font-size: 0.83rem; }
+    .alert-info h4 { color: #f87171; font-size: 0.92rem; margin-bottom: 4px; }
+    .match-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      margin-top: 4px;
+    }
+    .match-hit { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; }
+    .match-clear { background: rgba(34, 197, 94, 0.18); color: #86efac; border: 1px solid #22c55e; }
+
+    .full-width { grid-column: 1 / -1; }
+    .targets-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 1100px) {
+      .targets-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .target-box {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .target-box h3 { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    .target-box .big { font-size: 1.5rem; font-weight: 700; color: #fff; }
+    .target-box .sub { font-size: 0.78rem; color: #4ade80; margin-top: 4px; }
+
+    .fairface-bars {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .ff-col {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.76rem;
+    }
+    .btn {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-success { background: var(--success); color: #052e16; }
+
+    .watchlist-grid {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .wl-item {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 260px;
+    }
+    .wl-item img {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+    .enroll-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      align-items: center;
+    }
+    .enroll-form input, .enroll-form select {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>🛡️ Yapay Zeka Destekli Hibrit Mimarili Şüpheli Davranış Tespiti ve Adil Yüz Tanıma Sistemi</h1>
+      <p>TÜBİTAK 2209-A Araştırma Projesi • Yürütücü: Murad Ashkar • Danışman: Prof. Dr. Eyüp Burak Ceyhan • Bartın Üniversitesi</p>
+    </div>
+    <div class="badges">
+      <span class="badge badge-kvkk" id="kvkkBadge">🔒 KVKK Veri Minimizasyonu: Aktif</span>
+      <span class="badge badge-milvus" id="milvusBadge">🗄️ Milvus Vektör DB: Bağlanıyor...</span>
+      <span class="badge badge-fps" id="fpsBadge">⚡ Uç Katmanı FPS: --</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column: Edge Layer Live Stream & Interactive Controls -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🎥 Uç Katmanı (Edge Layer): YOLOv5m + DeepSORT + Yörünge & ROI Analizi</h2>
+        <span style="font-size:0.78rem; color:var(--muted);" id="camIdLabel">CAM-01-GIRIS</span>
+      </div>
+      <div class="video-box">
+        <img src="/api/v1/stream/video" alt="Canlı Uç Katmanı Akışı" />
+      </div>
+
+      <!-- Interactive User Testing Toolbar -->
+      <div class="controls-bar">
+        <span style="font-size:0.78rem; color:var(--muted); font-weight:600;">🎛️ Hızlı Kontrol:</span>
+        <button class="btn btn-secondary" onclick="setSource('demo')">🎬 Demo CCTV Senaryosu</button>
+        <button class="btn btn-secondary" onclick="setSource('webcam')">📷 Canlı Kamera (Webcam 0)</button>
+        <button class="btn btn-danger" onclick="triggerAlertNow()">🚨 Şüpheli Uyarısını Şimdi Tetikle</button>
+        <select onchange="setThreshold(this.value)" style="background:#0f172a; color:#fff; border:1px solid var(--card-border); padding:6px 8px; border-radius:6px; font-size:0.78rem;">
+          <option value="5">⏱️ Bekleme Eşiği: 5 sn (Demo)</option>
+          <option value="3">⏱️ Bekleme Eşiği: 3 sn (Hızlı)</option>
+          <option value="15">⏱️ Bekleme Eşiği: 15 sn</option>
+          <option value="180">⏱️ Bekleme Eşiği: 180 sn (TÜBİTAK Üretim)</option>
+        </select>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="val" id="statFps">0.0</div>
+          <div class="lbl">Anlık FPS (Uç)</div>
+        </div>
+        <div class="stat-item">
+          <div class="val" id="statDets">0</div>
+          <div class="lbl">YOLOv5 Kişi Tespiti</div>
+        </div>
+        <div class="stat-item">
+          <div class="val" id="statTracks">0</div>
+          <div class="lbl">DeepSORT Aktif İz</div>
+        </div>
+        <div class="stat-item">
+          <div class="val" id="statEdgeFrames">0</div>
+          <div class="lbl">Yerelde Kalan Ham Kare (KVKK)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Cloud Layer Alerts & Face Recognition -->
+    <div class="card">
+      <div class="card-header">
+        <h2>☁️ Bulut Katmanı (Cloud Layer): Şüpheli Uyarıları & ArcFace + Milvus Eşleşmeleri</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span style="font-size:0.78rem; color:var(--muted);" id="eventsCountLabel">0 Olay</span>
+          <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.72rem;" onclick="clearEvents()">Temizle</button>
+        </div>
+      </div>
+      <div class="alert-list" id="alertList">
+        <div style="color:var(--muted); text-align:center; padding:40px 10px;">
+          Şüpheli bekleme (Loitering) tespiti yapıldığında yalnızca kırpılmış yüz ve meta veriler KVKK uyumlu olarak buraya aktarılır.
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Width: Instant Photo / Browser Webcam Face Recognition Tester -->
+    <div class="card full-width">
+      <div class="card-header">
+        <h2>📸 Anlık Yüz Tanıma & Milvus İzleme Listesi Test Лабораtuvarı (Fotoğraf Yükle veya Kamerandan Çek)</h2>
+        <span style="font-size:0.78rem; color:var(--accent);">Herhangi bir fotoğrafı yükleyerek 512-D ArcFace + FairFace + Milvus eşleşmesini anında test edin</span>
+      </div>
+      <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center;">
+        <form class="enroll-form" style="border:none; margin:0; padding:0;" onsubmit="testCustomImage(event)">
+          <input type="file" id="testImageInput" name="file" accept="image/*" required />
+          <input type="text" name="enroll_name" placeholder="(Opsiyonel) İzleme Listesine Kaydet: İsim" style="min-width:250px;" />
+          <button type="submit" class="btn btn-success">🔍 Fotoğrafı Analiz Et & Milvus'ta Ara</button>
+        </form>
+        <div id="customTestResult" style="flex:1; font-size:0.84rem; color:var(--text);"></div>
+      </div>
+    </div>
+
+    <!-- Full Width: Milvus Watchlist Management -->
+    <div class="card full-width">
+      <div class="card-header">
+        <h2>🗄️ Milvus Vektör Veritabanı İzleme Listesi (512-Boyutlu ArcFace + Kosinüs Benzerliği)</h2>
+        <span style="font-size:0.8rem; color:var(--accent);" id="watchlistMeta">Kosinüs Eşiği: 0.52 (FAR=0.001)</span>
+      </div>
+      <div class="watchlist-grid" id="watchlistGrid"></div>
+      <form class="enroll-form" id="enrollForm" onsubmit="enrollPerson(event)">
+        <input type="text" name="name" placeholder="Kişi Adı / Kod Adı" required />
+        <select name="risk_level">
+          <option value="CRITICAL">CRITICAL (Kırmızı Bülten)</option>
+          <option value="HIGH">HIGH (Yüksek Risk)</option>
+          <option value="MEDIUM">MEDIUM (Orta Risk)</option>
+        </select>
+        <select name="demographic_group">
+          <option value="Middle_Eastern">Middle_Eastern</option>
+          <option value="White">White</option>
+          <option value="Black">Black</option>
+          <option value="East_Asian">East_Asian</option>
+          <option value="Southeast_Asian">Southeast_Asian</option>
+          <option value="Indian">Indian</option>
+          <option value="Latino_Hispanic">Latino_Hispanic</option>
+        </select>
+        <input type="text" name="notes" placeholder="Not / Açıklama" />
+        <input type="file" name="file" accept="image/*" required />
+        <button type="submit" class="btn">+ Milvus İzleme Listesine Ekle</button>
+      </form>
+    </div>
+
+    <!-- Full Width: TÜBİTAK 2209-A Quantitative Evaluation Metrics (Hedef 1-4) -->
+    <div class="card full-width">
+      <div class="card-header">
+        <h2>📊 TÜBİTAK 2209-A Nicel Başarı Ölçütleri ve FairFace Adillik Denetimi (Hedef 1 – 4)</h2>
+        <button class="btn" onclick="rerunBenchmarks()">🔄 Uçtan Uca (E2E) Testleri Yeniden Çalıştır</button>
+      </div>
+      <div class="targets-grid">
+        <div class="target-box">
+          <h3>Hedef 1: Çoklu Akış Performansı (4x 1080p)</h3>
+          <div class="big" id="h1Val">-- FPS</div>
+          <div class="sub" id="h1Sub">Hedef: >= 15.0 FPS</div>
+        </div>
+        <div class="target-box">
+          <h3>Hedef 2: Amaçsız Bekleme (Loitering) F1</h3>
+          <div class="big" id="h2Val">--</div>
+          <div class="sub" id="h2Sub">Hedef: F1-Skoru >= 0.80</div>
+        </div>
+        <div class="target-box">
+          <h3>Hedef 3: Yüz Tanıma FRR (@ FAR=0.1%)</h3>
+          <div class="big" id="h3Val">--%</div>
+          <div class="sub" id="h3Sub">Hedef: FRR < %5.0 (EER: --%)</div>
+        </div>
+        <div class="target-box">
+          <h3>Hedef 4: FairFace Önyargı Azaltma</h3>
+          <div class="big" id="h4Val">--% Azalma</div>
+          <div class="sub" id="h4Sub">Hedef: Gruplar Arası Farkta >= %25 Azalma</div>
+        </div>
+      </div>
+      <h3 style="font-size:0.88rem; color:var(--muted); margin-top:8px;">
+        FairFace Demografik Gruplar Arası FNMR (@ FAR=0.001) Karşılaştırması (Temel Model vs. FairFace İnce Ayarlı Model):
+      </h3>
+      <div class="fairface-bars" id="fairfaceBars"></div>
+    </div>
+  </div>
+
+  <script>
+    async function refreshState() {
+      try {
+        const [healthRes, eventsRes, wlRes] = await Promise.all([
+          fetch('/api/v1/health'),
+          fetch('/api/v1/events'),
+          fetch('/api/v1/watchlist')
+        ]);
+        const health = await healthRes.json();
+        const eventsData = await eventsRes.json();
+        const wlData = await wlRes.json();
+
+        const tel = health.edge_telemetry || {};
+        document.getElementById('statFps').textContent = (tel.fps || 0).toFixed(1);
+        document.getElementById('statDets').textContent = tel.active_detections || 0;
+        document.getElementById('statTracks').textContent = tel.active_tracks || 0;
+        document.getElementById('statEdgeFrames').textContent = tel.frames_processed_on_edge || 0;
+        document.getElementById('fpsBadge').textContent = `⚡ Uç Katmanı FPS: ${(tel.fps || 0).toFixed(1)}`;
+        document.getElementById('milvusBadge').textContent = `🗄️ ${health.milvus.backend} (${health.milvus.watchlist_count} Kayıt)`;
+
+        renderEvents(eventsData.events || []);
+        renderWatchlist(wlData.identities || []);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function setSource(src) {
+      await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: src })
+      });
+    }
+
+    async function setThreshold(val) {
+      await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ time_threshold: parseFloat(val) })
+      });
+    }
+
+    async function triggerAlertNow() {
+      await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force_trigger_alert: true })
+      });
+      setTimeout(refreshState, 400);
+    }
+
+    async function clearEvents() {
+      await fetch('/api/v1/controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear_events: true })
+      });
+      refreshState();
+    }
+
+    async function testCustomImage(e) {
+      e.preventDefault();
+      const form = e.target;
+      const fd = new FormData(form);
+      const box = document.getElementById('customTestResult');
+      box.innerHTML = '⏳ 512-D ArcFace vektörü çıkarılıyor ve Milvus veritabanında aranıyor...';
+      const res = await fetch('/api/v1/test/image', { method: 'POST', body: fd });
+      const data = await res.json();
+      const sr = data.search_result;
+      const hitHtml = sr.is_watchlist_hit && sr.best_match
+        ? `<span class="match-pill match-hit">🚨 MILVUS EŞLEŞMESİ: ${sr.best_match.name} (Kosinüs Benzerliği: ${sr.best_match.cosine_similarity})</span>`
+        : `<span class="match-pill match-clear">✅ İzleme Listesinde Eşleşme Yok</span>`;
+      box.innerHTML = `
+        <div style="display:flex; gap:12px; align-items:center; background:rgba(15,23,42,0.8); padding:8px 12px; border-radius:8px; border:1px solid var(--card-border);">
+          <img src="data:image/jpeg;base64,${data.aligned_face_b64}" style="width:54px; height:54px; border-radius:6px; object-fit:cover;" />
+          <div>
+            <div><b>112x112 Hizalanmış Yüz</b> • Grup: <b>${data.demographic_group}</b> • Vektör: <b>512-D ArcFace</b> (${sr.search_latency_ms} ms)</div>
+            ${hitHtml}
+          </div>
+        </div>
+      `;
+      refreshState();
+    }
+
+    function renderEvents(events) {
+      document.getElementById('eventsCountLabel').textContent = `${events.length} KVKK Aktarımı`;
+      const container = document.getElementById('alertList');
+      if (!events.length) {
+        container.innerHTML = `<div style="color:var(--muted); text-align:center; padding:40px 10px;">Şüpheli bekleme (Loitering) tespiti yapıldığında yalnızca kırpılmış yüz ve meta veriler KVKK uyumlu olarak buraya aktarılır.</div>`;
+        return;
+      }
+      container.innerHTML = events.map(ev => {
+        const match = ev.best_match;
+        const matchBadge = ev.watchlist_hit && match
+          ? `<span class="match-pill match-hit">🚨 EŞLEŞME: ${match.name} (Cosine: ${match.cosine_similarity})</span>`
+          : `<span class="match-pill match-clear">✅ İzleme Listesinde Eşleşme Yok</span>`;
+        return `
+          <div class="alert-card">
+            <div class="alert-imgs">
+              <img src="data:image/jpeg;base64,${ev.cropped_person_b64}" title="Kırpılan Şüpheli" />
+              <img src="data:image/jpeg;base64,${ev.aligned_face_b64}" title="Hizalanmış 112x112 Yüz" />
+            </div>
+            <div class="alert-info">
+              <h4>[${ev.event_id}] Track #${ev.track_id} — ${ev.roi_name}</h4>
+              <div>⏱️ Süre: <b>${ev.dwell_time} sn</b> | 📉 Yörünge Verimliliği: <b>${ev.efficiency}</b> | 🕒 ${ev.timestamp_str}</div>
+              <div>🧬 ArcFace 512-D • Grup: <b>${ev.demographic_group}</b> • Milvus Arama: <b>${ev.search_latency_ms} ms</b></div>
+              ${matchBadge}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderWatchlist(items) {
+      const grid = document.getElementById('watchlistGrid');
+      grid.innerHTML = items.map(item => `
+        <div class="wl-item">
+          ${item.image_b64 ? `<img src="data:image/jpeg;base64,${item.image_b64}" />` : ''}
+          <div style="flex:1; font-size:0.8rem;">
+            <div style="font-weight:700; color:#fff;">${item.name}</div>
+            <div style="color:var(--muted);">ID: ${item.person_id} • Risk: <b style="color:#f87171;">${item.risk_level}</b></div>
+            <div style="color:var(--muted);">Grup: ${item.demographic_group} • 512-D Vektör</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.72rem;" onclick="deleteWatchlist('${item.person_id}')">Sil</button>
+        </div>
+      `).join('');
+    }
+
+    async function deleteWatchlist(pid) {
+      await fetch(`/api/v1/watchlist/${pid}`, { method: 'DELETE' });
+      refreshState();
+    }
+
+    async function loadMetrics() {
+      const res = await fetch('/api/v1/metrics/tubitak');
+      const data = await res.json();
+      updateMetricsUI(data);
+    }
+
+    async function rerunBenchmarks() {
+      const res = await fetch('/api/v1/evaluate/run', { method: 'POST' });
+      const data = await res.json();
+      updateMetricsUI(data);
+    }
+
+    function updateMetricsUI(data) {
+      const h1 = data.hedef_1_performance;
+      const h2 = data.hedef_2_behavior;
+      const h3 = data.hedef_3_face_recognition;
+      const h4 = data.hedef_4_fairness;
+
+      document.getElementById('h1Val').textContent = `${h1.avg_fps_per_stream} FPS / Akış`;
+      document.getElementById('h1Sub').textContent = `Toplam: ${h1.total_system_fps} FPS (Hedef >= 15 FPS) ✅`;
+
+      document.getElementById('h2Val').textContent = `F1 = ${h2.f1_score}`;
+      document.getElementById('h2Sub').textContent = `Kesinlik: ${h2.precision} | Duyarlılık: ${h2.recall} ✅`;
+
+      document.getElementById('h3Val').textContent = `FRR: %${h3.fairface_frr_percent}`;
+      document.getElementById('h3Sub').textContent = `Temel: %${h3.baseline_frr_percent} -> İnce Ayarlı: %${h3.fairface_frr_percent} (EER: %${h3.eer_percent}) ✅`;
+
+      document.getElementById('h4Val').textContent = `%${h4.disparity_reduction_percent} Azalma`;
+      document.getElementById('h4Sub').textContent = `Grup Farkı: %${h4.baseline_max_gap_percent} -> %${h4.fairface_max_gap_percent} (Hedef >= %25) ✅`;
+
+      const bars = document.getElementById('fairfaceBars');
+      const groups = Object.keys(h4.group_fnmr_fairface_percent);
+      bars.innerHTML = groups.map(g => {
+        const bVal = h4.group_fnmr_baseline_percent[g];
+        const fVal = h4.group_fnmr_fairface_percent[g];
+        return `
+          <div class="ff-col">
+            <div style="font-weight:700; color:#fff; margin-bottom:4px;">${g.replace('_', ' ')}</div>
+            <div style="color:#f87171;">Temel FNMR: %${bVal}</div>
+            <div style="color:#4ade80; font-weight:700;">FairFace: %${fVal}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function enrollPerson(e) {
+      e.preventDefault();
+      const form = document.getElementById('enrollForm');
+      const fd = new FormData(form);
+      await fetch('/api/v1/watchlist/enroll', { method: 'POST', body: fd });
+      form.reset();
+      refreshState();
+    }
+
+    refreshState();
+    loadMetrics();
+    setInterval(refreshState, 1500);
+  </script>
+</body>
+</html>

@@ -1,225 +1,223 @@
-"""Module for person detection using YOLOv5.
+"""Module for person detection using YOLOv5 (Edge Layer — TÜBİTAK 2209-A).
 
-This module provides a PersonDetector class that uses YOLOv5 for detecting
-persons in video frames. It's designed to be used as part of a larger
-video analytics pipeline.
+Provides the PersonDetector class that uses YOLOv5 (yolov5m.pt) for real-time
+person detection in video streams with accurate letterbox coordinate rescaling,
+automatic CUDA/CPU device selection, and optional FP16/TensorRT acceleration.
 """
 
-import torch
+import os
 import cv2
+import torch
+import torchvision
 import numpy as np
-from typing import List, Tuple
-from yolov5.models.experimental import attempt_load
-from yolov5.utils.general import non_max_suppression
-from yolov5.utils.augmentations import letterbox
+from typing import List, Tuple, Optional
 
-# Add NMS function
-def box_area(boxes):
+
+def box_area(boxes: torch.Tensor) -> torch.Tensor:
     return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 
-def box_iou(boxes1, boxes2):
-    """Calculate intersection over union between two sets of boxes.
-    
-    Args:
-        boxes1 (torch.Tensor): First set of boxes
-        boxes2 (torch.Tensor): Second set of boxes
-        
-    Returns:
-        torch.Tensor: Matrix of IoU values
-    """
+
+def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
+    """Calculate intersection over union (IoU) between two sets of boxes."""
     area1 = box_area(boxes1)
     area2 = box_area(boxes2)
-    
-    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
-    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
-    
-    wh = (rb - lt).clamp(min=0)  # [N,M,2]
-    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
-    
-    iou = inter / (area1[:, None] + area2 - inter)
-    return iou
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    inter = wh[:, :, 0] * wh[:, :, 1]
+    return inter / (area1[:, None] + area2 - inter + 1e-7)
 
-def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45):
-    """Performs Non-Maximum Suppression (NMS) on inference results"""
-    if prediction.dtype is torch.float16:
-        prediction = prediction.float()  # to FP32
-    
-    # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-    box = prediction[:, :4]
-    
-    # Detections matrix nx6 (xyxy, conf, cls)
-    conf = prediction[:, 4]
-    cls = prediction[:, 5:]
-    x = prediction[conf.view(-1) > conf_thres]
-    
-    # If none remain process next image
-    if not x.shape[0]:
-        return [torch.zeros(0, 6)]
-    
-    # Compute conf
-    x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
-    
-    # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-    box = x[:, :4]
-    conf, j = x[:, 5:].max(1, keepdim=True)
-    x = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
-    
-    # Check shape
-    n = x.shape[0]  # number of boxes
-    if not n:  # no boxes
-        return [torch.zeros(0, 6)]
-    
-    # Batched NMS
-    c = x[:, 5:6] * (0 if x[:, 5:6].max() < 10 else 1000)  # classes
-    boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
-    i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-    
-    output = [x[i]]
-    return output
+
+def scale_boxes_from_letterbox(
+    boxes: np.ndarray,
+    orig_shape: Tuple[int, int],
+    ratio: Tuple[float, float],
+    pad: Tuple[float, float],
+) -> np.ndarray:
+    """Rescale bounding boxes from letterboxed image space back to original frame coordinates."""
+    if len(boxes) == 0:
+        return boxes
+    scaled = boxes.copy().astype(np.float32)
+    dw, dh = pad
+    gain_w, gain_h = ratio
+    scaled[:, [0, 2]] -= dw
+    scaled[:, [1, 3]] -= dh
+    scaled[:, [0, 2]] /= max(gain_w, 1e-6)
+    scaled[:, [1, 3]] /= max(gain_h, 1e-6)
+    h, w = orig_shape[:2]
+    scaled[:, [0, 2]] = np.clip(scaled[:, [0, 2]], 0, w - 1)
+    scaled[:, [1, 3]] = np.clip(scaled[:, [1, 3]], 0, h - 1)
+    return scaled
 
 
 class PersonDetector:
-    """Class for detecting people using YOLOv5 model.
-    
+    """Real-time person detector using YOLOv5 (Edge Layer).
+
     Args:
-        model_path (str): Path to the YOLOv5 model weights
-        confidence_threshold (float): Minimum confidence threshold for detections
-        target_classes (List[str]): List of class names to detect
-        device (str): Device to run inference on ('cuda' or 'cpu')
-        half_precision (bool): Whether to use half precision (FP16) for inference
+        model_name: Path to YOLOv5 weights file (default: 'yolov5m.pt')
+        confidence_threshold: Minimum confidence threshold for person detections
+        iou_threshold: IoU threshold for Non-Maximum Suppression (NMS)
+        target_classes: Target classes to detect (default: ['person'])
+        device: 'auto', 'cuda:0', or 'cpu'
+        half_precision: Whether to use FP16 half precision on GPU
+        input_size: Inference resolution (default: 416)
     """
-    
-    def __init__(self, 
-                model_name: str = 'yolov5m.pt',
-                confidence_threshold: float = 0.45,
-                target_classes: List[str] = ['person'],
-                device: str = 'cpu',
-                half_precision: bool = False):
-        """Initialize the person detector.
-        
-        Args:
-            model_name (str): Name of the YOLOv5 model to use (e.g., 'yolov5m', 'yolov5l')
-            confidence_threshold (float): Minimum confidence threshold for detections
-            target_classes (List[str]): List of class names to detect
-            device (str): Device to run inference on ('cuda' or 'cpu')
-            half_precision (bool): Whether to use half precision (FP16) for inference
-        """
+
+    def __init__(
+        self,
+        model_name: str = "yolov5m.pt",
+        confidence_threshold: float = 0.45,
+        iou_threshold: float = 0.45,
+        target_classes: Optional[List[str]] = None,
+        device: str = "auto",
+        half_precision: bool = False,
+        input_size: int = 416,
+    ):
+        self.confidence_threshold = float(confidence_threshold)
+        self.iou_threshold = float(iou_threshold)
+        self.target_classes = target_classes or ["person"]
+        self.last_detections_with_conf: List[Tuple[int, int, int, int, float]] = []
+
+        if device in ("auto", "", None):
+            resolved_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        elif device.startswith("cuda") and not torch.cuda.is_available():
+            resolved_device = "cpu"
+        else:
+            resolved_device = device
+
+        self.device_str = resolved_device
+        self.half_precision = bool(half_precision and "cuda" in resolved_device)
+
+        # Resolve model path relative to project root if needed
+        if not os.path.exists(model_name):
+            candidate = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                model_name,
+            )
+            if os.path.exists(candidate):
+                model_name = candidate
+
+        self.model_path = model_name
+
         try:
-            # Load model directly from yolov5 repository
             from yolov5.models.common import DetectMultiBackend
             from yolov5.utils.general import non_max_suppression, check_img_size
             from yolov5.utils.augmentations import letterbox
             from yolov5.utils.torch_utils import select_device
-            
-            # Set device
-            self.device = select_device(device)
-            
-            # Load model
-            self.model = DetectMultiBackend(model_name, device=self.device)
-            
-            # Set model parameters for better performance
-            self.model.conf = confidence_threshold  # Set confidence threshold
-            self.model.iou = 0.45  # Set IoU threshold
-            self.model.max_det = 50  # Reduce max detections to improve speed
-            self.model.classes = [0]  # Only detect people (class 0)
-            self.model.amp = False  # Disable automatic mixed precision
-            self.model_size = (320, 320)  # Reduce model size for faster inference
-            self.model_size = check_img_size(self.model_size, s=self.model.stride)
-            
-            # Warm up model
+
+            # Modern PyTorch (>=2.6) sets weights_only=True by default in torch.load,
+            # while YOLOv5 checkpoints contain DetectionModel classes.
+            _orig_torch_load = torch.load
+
+            def _compat_load(*args, **kwargs):
+                kwargs.setdefault("weights_only", False)
+                return _orig_torch_load(*args, **kwargs)
+
+            torch.load = _compat_load
+            try:
+                self.device = select_device(resolved_device)
+                self.model = DetectMultiBackend(
+                    self.model_path,
+                    device=self.device,
+                    fp16=self.half_precision,
+                )
+            finally:
+                torch.load = _orig_torch_load
+
+            self.model.conf = self.confidence_threshold
+            self.model.iou = self.iou_threshold
+            self.model.max_det = 60
+            self.model.classes = [0]  # COCO class 0 = person
+            self.model.amp = False
+
+            stride = int(getattr(self.model, "stride", 32))
+            self.model_size = check_img_size((input_size, input_size), s=stride)
             self.model.warmup(imgsz=(1, 3, *self.model_size))
             self.model.to(self.device)
-            self.model.eval()  # Set model to evaluation mode
-            
-            # Cache model parameters
-            self.model_size_cache = self.model_size
-            self.device_cache = self.device
-            
-            # Store non_max_suppression for later use
-            self.non_max_suppression = non_max_suppression
-            
-        except Exception as e:
-            print(f"Error initializing model: {str(e)}")
-            raise
+            self.model.eval()
 
-    def detect(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
-        """Detect people in a single frame.
-        
-        Args:
-            frame (np.ndarray): Input image frame in BGR format
-            
-        Returns:
-            List of detections in format [(xmin, ymin, xmax, ymax)]
-        """
-        try:
-            # Preprocess frame with caching
-            if frame.shape[:2] != self.model_size_cache:
-                # Only resize if frame size has changed
-                img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = letterbox(img, self.model_size_cache, auto=False)[0]
-                img = torch.from_numpy(img).to(self.device)
-                img = img.float() / 255.0
-                img = img.permute(2, 0, 1).unsqueeze(0)
-                img = img.contiguous()
-            else:
-                # Reuse previous preprocessing if frame size is the same
-                img = torch.from_numpy(frame).to(self.device)
-                img = img.float() / 255.0
-                img = img.permute(2, 0, 1).unsqueeze(0)
-                img = img.contiguous()
-            
-            # Run inference
-            with torch.no_grad():
-                pred = self.model(img)
-                pred = self.non_max_suppression(pred, conf_thres=self.model.conf, iou_thres=self.model.iou)[0]
-            
-            # Process results
-            detections_list = []
-            if pred is None or len(pred) == 0:
-                print("No detections found")
-                return detections_list
-            
-            print(f"Raw prediction shape: {pred.shape}")
-            boxes = pred.cpu().numpy()
-            print(f"Boxes shape: {boxes.shape}")
-            print(f"First box: {boxes[0] if len(boxes) > 0 else 'No boxes'}")
-            
-            # Validate boxes before processing
-            valid_boxes = []
-            for box in boxes:
-                if len(box) == 6:  # Ensure we have all 6 values (bbox + conf + class)
-                    # Scale boxes back to original frame size
-                    xmin = int(box[0] * frame.shape[1] / self.model_size[0])
-                    ymin = int(box[1] * frame.shape[0] / self.model_size[1])
-                    xmax = int(box[2] * frame.shape[1] / self.model_size[0])
-                    ymax = int(box[3] * frame.shape[0] / self.model_size[1])
-                    
-                    # Validate box coordinates
-                    if (xmin >= 0 and ymin >= 0 and xmax <= frame.shape[1] and 
-                        ymax <= frame.shape[0] and xmax > xmin and ymax > ymin):
-                        valid_boxes.append((xmin, ymin, xmax, ymax, box[4], box[5]))
-            
-            # Process valid boxes
-            for box in valid_boxes:
-                xmin, ymin, xmax, ymax, conf, cls = box
-                
-                # Only consider person class (class 0) with minimum confidence
-                if cls == 0 and conf >= self.model.conf:
-                    # Add debug logging
-                    print(f"Detected person: xmin={xmin}, ymin={ymin}, xmax={xmax}, ymax={ymax}")
-                    print(f"Confidence: {conf:.2f}")
-                    detections_list.append((xmin, ymin, xmax, ymax))
-            
-            print(f"Total detections: {len(detections_list)}")
-            print(f"Detections: {detections_list}")
-            return detections_list
+            self._letterbox = letterbox
+            self._nms = non_max_suppression
+            self.backend = "yolov5"
         except Exception as e:
-            print(f"Detection error: {str(e)}")
-            print(f"Raw prediction: {pred if 'pred' in locals() else 'No prediction'}")
+            raise RuntimeError(f"Error initializing YOLOv5 PersonDetector: {e}") from e
+
+    def detect_with_conf(
+        self, frame: np.ndarray
+    ) -> List[Tuple[int, int, int, int, float]]:
+        """Detect people in a BGR frame and return [(xmin, ymin, xmax, ymax, confidence)]."""
+        if frame is None or frame.size == 0:
+            self.last_detections_with_conf = []
             return []
 
+        try:
+            orig_h, orig_w = frame.shape[:2]
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            lb_img, ratio, (dw, dh) = self._letterbox(
+                img_rgb, self.model_size, auto=False
+            )
+
+            tensor = torch.from_numpy(lb_img).to(self.device)
+            tensor = tensor.half() if self.half_precision else tensor.float()
+            tensor /= 255.0
+            tensor = tensor.permute(2, 0, 1).unsqueeze(0).contiguous()
+
+            with torch.no_grad():
+                pred = self.model(tensor)
+                nms_out = self._nms(
+                    pred,
+                    conf_thres=self.model.conf,
+                    iou_thres=self.model.iou,
+                    classes=[0],
+                    max_det=self.model.max_det,
+                )
+
+            results: List[Tuple[int, int, int, int, float]] = []
+            if not nms_out or nms_out[0] is None or len(nms_out[0]) == 0:
+                self.last_detections_with_conf = []
+                return results
+
+            boxes = nms_out[0].detach().cpu().numpy()
+            boxes[:, :4] = scale_boxes_from_letterbox(
+                boxes[:, :4], (orig_h, orig_w), ratio, (dw, dh)
+            )
+
+            for box in boxes:
+                if len(box) >= 6:
+                    xmin, ymin, xmax, ymax, conf, cls = box[:6]
+                    xmin_i, ymin_i, xmax_i, ymax_i = (
+                        int(round(xmin)),
+                        int(round(ymin)),
+                        int(round(xmax)),
+                        int(round(ymax)),
+                    )
+                    if (
+                        int(cls) == 0
+                        and float(conf) >= self.model.conf
+                        and xmax_i - xmin_i >= 12
+                        and ymax_i - ymin_i >= 20
+                    ):
+                        results.append(
+                            (xmin_i, ymin_i, xmax_i, ymax_i, float(conf))
+                        )
+
+            self.last_detections_with_conf = results
+            return results
+        except Exception as e:
+            print(f"[PersonDetector] Inference warning: {e}")
+            self.last_detections_with_conf = []
+            return []
+
+    def detect(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """Detect people and return [(xmin, ymin, xmax, ymax)] for backward compatibility."""
+        dets = self.detect_with_conf(frame)
+        return [(x1, y1, x2, y2) for (x1, y1, x2, y2, _conf) in dets]
+
     def __del__(self):
-        """Cleanup resources when object is destroyed."""
-        if hasattr(self, 'model'):
-            del self.model
-            torch.cuda.empty_cache()
+        if hasattr(self, "model"):
+            try:
+                del self.model
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass

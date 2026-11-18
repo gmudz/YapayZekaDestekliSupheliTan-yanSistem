@@ -25,6 +25,10 @@ venv/
 .env/
 .venv/
 env/
+suspicious_behavior_project/venv/
+suspicious_behavior_project/volumes/
+suspicious_behavior_project/data/
+suspicious_behavior_project/.pytest_cache/
 
 # IDE
 .idea/

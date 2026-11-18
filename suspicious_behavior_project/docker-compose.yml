@@ -1,0 +1,29 @@
+services:
+  milvus-standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.4.15
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: "/var/lib/milvus/etcd"
+      COMMON_STORAGETYPE: "local"
+    volumes:
+      - ./volumes/milvus:/var/lib/milvus
+    command: ["milvus", "run", "standalone"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      start_period: 25s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    restart: unless-stopped
+    networks:
+      - milvus-net
+
+networks:
+  milvus-net:
+    name: tubitak-milvus-network
