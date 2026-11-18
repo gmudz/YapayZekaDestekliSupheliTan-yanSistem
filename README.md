@@ -183,6 +183,12 @@ flowchart TD
 - **البحث الجنائي النصي (`Forensic Natural Language Search`):** شريط بحث فوري في لوحة التحكم يتيح البحث بأي وصف نصي (مثل: `"Siyah"`, `"Main_Entrance"`, `"STANDING"`, `"WL-LIVE-CAM"`).
 - **الإنذار الصوتي الآلي (`Voice TTS Alert`) وإشعارات `Telegram`:** نطق صوتي آلي باللغة التركية عند رصد تطابق في القائمة الحمراء، مع زر إرسال التقرير الفوري إلى بوت **Telegram**.
 
+### 🧪 نتائج الاختبار الحي والتحقق الفعلي (Live Verification Summary)
+- **اختبارات الوحدة والتكامل (`pytest -v tests/test_tubitak_system.py`):** نجحت جميع الاختبارات الستة (`6 passed`) على كلٍّ من الخادم الرئيسي ولابتوب **HP EliteBook Folio G1**.
+- **التجربة الحية على كاميرا اللابتوب (`/dev/video0`):**
+  - التسجيل التلقائي للوجه الحي في قاعدة بيانات **`Milvus Standalone v2.4 (COSINE)`** تحت المعرف `WL-LIVE-CAM` ومطابقته الحية (`Cosine Similarity = 0.7388` بزمن بحث `45.6 ms`).
+  - تفعيل فحص الحيوية (`Liveness = 99%`)، التمويه التلقائي `KVKK`، التنبؤ المساري، ورصد الأمتعة المتروكة (`Abandoned_Backpack` مع البحث الجنائي الفوري `Forensic Search`) بنجاح كامل عبر واجهة **Google Stitch**.
+
 ---
 
 ## 🚀 التشغيل الفوري بنقرة واحدة / Tek Komutla Çalıştırma

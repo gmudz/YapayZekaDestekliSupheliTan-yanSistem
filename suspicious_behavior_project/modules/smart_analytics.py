@@ -210,6 +210,7 @@ class SmartIntelligenceEngine:
         """Estimate skeletal keypoints, classify posture/actions, and draw pose wireframe."""
         pose_alerts: List[Dict[str, Any]] = []
 
+        frame_h = frame.shape[0]
         for obj in tracked_objects:
             x1, y1, x2, y2 = [int(v) for v in obj["bbox"][:4]]
             bw = max(12, x2 - x1)
@@ -220,12 +221,13 @@ class SmartIntelligenceEngine:
             vx, vy = obj.get("velocity", (0.0, 0.0))
             speed = math.hypot(vx, vy)
             aspect = bh / float(bw)
+            is_closeup_webcam = (y2 >= frame_h - 20) or (bw > 240 and bh > 240)
 
             # Classify posture & action state
-            if aspect < 0.92:
+            if aspect < 0.88 and bh < 210 and not is_closeup_webcam:
                 action_label = "FALL_DETECTED (ACIL DUSME!)"
                 is_anomaly = True
-            elif aspect < 1.35 and bh < 220:
+            elif aspect < 1.35 and bh < 220 and not is_closeup_webcam:
                 action_label = "CROUCHING / SNEAKING (EGILME)"
                 is_anomaly = True
             elif speed > 18.0:
