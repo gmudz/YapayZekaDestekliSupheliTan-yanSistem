@@ -301,6 +301,29 @@ def main():
     frame_idx = 0
     watchlist_matches: Dict[int, Dict[str, Any]] = {}
     sim_clock = time.time()
+    live_webcam_enrolled = False
+
+    # Asynchronous background detector state for smooth 20-30 FPS live webcam rendering
+    det_lock = threading.Lock()
+    shared_det_state: Dict[str, Any] = {
+        "frame_to_process": None,
+        "latest_dets": [],
+        "running": True,
+    }
+
+    def _async_detector_worker():
+        while shared_det_state["running"]:
+            frm = shared_det_state["frame_to_process"]
+            if frm is not None:
+                shared_det_state["frame_to_process"] = None
+                res = detector.detect_with_conf(frm)
+                with det_lock:
+                    shared_det_state["latest_dets"] = res
+            else:
+                time.sleep(0.01)
+
+    det_thread = threading.Thread(target=_async_detector_worker, daemon=True)
+    det_thread.start()
 
     try:
         while True:
@@ -346,14 +369,28 @@ def main():
             frame_idx += 1
             privacy_bridge.register_frame_processed_on_edge()
 
-            # Advance simulation clock smoothly (0.20s per frame in demo mode so a 240-frame loop covers 48s)
-            if demo_mode:
-                sim_clock += 0.20
-            else:
+            is_live_webcam = str(config["camera"].get("source", "0")) in ("0", "/dev/video0")
+
+            # Use real wall-clock seconds on live webcam, or 0.20s/frame simulation clock on demo video
+            if is_live_webcam or not demo_mode:
                 sim_clock = time.time()
+            else:
+                sim_clock += 0.20
 
             # 1. Edge Person Detection (YOLOv5m)
-            dets_with_conf = detector.detect_with_conf(frame)
+            if is_live_webcam and args.max_frames == 0:
+                # Submit frame to background worker and read latest detections without blocking webcam FPS
+                if shared_det_state["frame_to_process"] is None:
+                    shared_det_state["frame_to_process"] = frame.copy()
+                with det_lock:
+                    dets_with_conf = list(shared_det_state["latest_dets"])
+                if frame_idx == 1 and not dets_with_conf:
+                    dets_with_conf = detector.detect_with_conf(frame)
+                    with det_lock:
+                        shared_det_state["latest_dets"] = dets_with_conf
+            else:
+                dets_with_conf = detector.detect_with_conf(frame)
+
             det_boxes = [(d[0], d[1], d[2], d[3]) for d in dets_with_conf]
             det_confs = [d[4] for d in dets_with_conf]
 
@@ -361,6 +398,28 @@ def main():
             tracked_objects = tracker.update(
                 det_boxes, frame=frame, confidences=det_confs
             )
+
+            # Auto-enroll live webcam user into Milvus Watchlist on first clear detection so live match works immediately
+            if is_live_webcam and not live_webcam_enrolled and tracked_objects:
+                try:
+                    trk0 = tracked_objects[0]
+                    crop0 = privacy_bridge.crop_suspect_region(frame, trk0["bbox"])
+                    aligned0, _, _ = cloud_engine.recognizer.detect_and_align_face(crop0)
+                    emb0 = cloud_engine.recognizer.extract_embedding(aligned0, already_aligned=True)
+                    b64_0 = privacy_bridge.encode_image_b64(aligned0)
+                    cloud_engine.vector_db.enroll_identity(
+                        person_id="WL-LIVE-CAM",
+                        name="Canlı Kamera Kullanıcısı (Aktif İzleme)",
+                        embedding=emb0,
+                        risk_level="CRITICAL",
+                        demographic_group="Middle_Eastern",
+                        image_b64=b64_0,
+                        notes="Canlı laptoptan otomatik izleme listesi kaydı",
+                    )
+                    live_webcam_enrolled = True
+                    print("[Live Webcam] Canlı kamera yüzü Milvus İzleme Listesine (WL-LIVE-CAM) kaydedildi!")
+                except Exception as e:
+                    print(f"[Live Webcam] Auto-enroll warning: {e}")
 
             # 3. Edge Behavior Analysis (ROI Dwell Time + Trajectory Efficiency)
             alerts = behavior_analyzer.update(
@@ -475,6 +534,7 @@ def main():
     except KeyboardInterrupt:
         print("\nKullanıcı tarafından durduruldu.")
     finally:
+        shared_det_state["running"] = False
         cap.release()
         if can_show_gui:
             try:

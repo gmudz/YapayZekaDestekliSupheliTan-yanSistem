@@ -42,7 +42,7 @@ model:
   iou_threshold: 0.45
   device: "auto"          # "auto", "cuda:0", veya "cpu"
   half_precision: false
-  input_size: 416         # Hız/doğruluk dengesi için çıkarım boyutu
+  input_size: 320         # Hız/doğruluk dengesi için çıkarım boyutu
 
 # ------------------------------------------------------------------------------
 # 3. UÇ KATMANI — Kişi Takibi (DeepSORT + Re-ID Görünüm Gömme)
@@ -71,9 +71,9 @@ loitering_analysis:
   # İlgi Alanları (Polygonal ROIs - 1280x720 çözünürlüğe göre)
   regions_of_interest:
     - name: "Main_Entrance_ROI"
-      points: [[80, 140], [560, 140], [560, 620], [80, 620]]
+      points: [[60, 80], [740, 80], [740, 680], [60, 680]]
     - name: "Sensitive_Area_ROI"
-      points: [[660, 160], [1180, 160], [1180, 620], [660, 620]]
+      points: [[750, 80], [1220, 80], [1220, 680], [750, 680]]
   alert:
     cooldown: 30          # Aynı kişi için tekrarlanan bulut aktarımı bekleme süresi (sn)
     threshold: 0.80

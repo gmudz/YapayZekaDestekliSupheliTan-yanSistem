@@ -139,8 +139,31 @@ class PersonDetector:
             self._letterbox = letterbox
             self._nms = non_max_suppression
             self.backend = "yolov5"
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            self._face_cascade = cv2.CascadeClassifier(cascade_path)
         except Exception as e:
             raise RuntimeError(f"Error initializing YOLOv5 PersonDetector: {e}") from e
+
+    def _detect_closeup_webcam_person(
+        self, frame: np.ndarray
+    ) -> List[Tuple[int, int, int, int, float]]:
+        """Fallback for close-up laptop webcam shots where mainly the user's face/head is visible."""
+        orig_h, orig_w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        small = cv2.resize(gray, (0, 0), fx=0.5, fy=0.5)
+        faces = self._face_cascade.detectMultiScale(
+            small, scaleFactor=1.15, minNeighbors=4, minSize=(28, 28)
+        )
+        results: List[Tuple[int, int, int, int, float]] = []
+        for fx, fy, fw, fh in faces:
+            fx, fy, fw, fh = int(fx * 2), int(fy * 2), int(fw * 2), int(fh * 2)
+            # Expand face box to upper-body person box
+            x1 = max(0, int(fx - fw * 0.6))
+            y1 = max(0, int(fy - fh * 0.25))
+            x2 = min(orig_w - 1, int(fx + fw * 1.6))
+            y2 = min(orig_h - 1, int(fy + fh * 2.6))
+            results.append((x1, y1, x2, y2, 0.88))
+        return results
 
     def detect_with_conf(
         self, frame: np.ndarray
@@ -174,7 +197,8 @@ class PersonDetector:
 
             results: List[Tuple[int, int, int, int, float]] = []
             if not nms_out or nms_out[0] is None or len(nms_out[0]) == 0:
-                self.last_detections_with_conf = []
+                results = self._detect_closeup_webcam_person(frame)
+                self.last_detections_with_conf = results
                 return results
 
             boxes = nms_out[0].detach().cpu().numpy()
