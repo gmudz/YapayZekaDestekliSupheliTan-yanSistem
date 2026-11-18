@@ -164,23 +164,41 @@ class CloudPipelineEngine:
             crop_bgr
         )
 
+        dwell_val = round(float(payload.get("dwell_time", 0.0)), 1)
+        eff_val = round(float(payload.get("efficiency", 0.0)), 3)
+        roi_val = payload.get("roi_name", "Main_Entrance_ROI")
+        is_hit = search_res["is_watchlist_hit"]
+        bm = search_res["best_match"]
+
+        if is_hit and bm:
+            behavior_summary = (
+                f"Şüpheli bekleme ({dwell_val}sn, Verim:{eff_val}) • "
+                f"Milvus Eşleşmesi: {bm['name']} (%{bm['cosine_similarity']*100:.1f})"
+            )
+        else:
+            behavior_summary = (
+                f"{roi_val} bölgesinde düşük yörünge verimliliği ({eff_val}) • "
+                f"İzleme listesinde kayıt bulunamadı"
+            )
+
         event_record = {
             "event_id": f"EVT-{int(time.time() * 1000) % 1000000:06d}",
             "timestamp_str": time.strftime("%Y-%m-%d %H:%M:%S"),
             "camera_id": payload.get("camera_id", "CAM-01-GIRIS"),
             "track_id": int(payload.get("track_id", 0)),
-            "roi_name": payload.get("roi_name", "Main_Entrance_ROI"),
-            "dwell_time": round(float(payload.get("dwell_time", 0.0)), 1),
-            "efficiency": round(float(payload.get("efficiency", 0.0)), 3),
+            "roi_name": roi_val,
+            "dwell_time": dwell_val,
+            "efficiency": eff_val,
             "kvkk_compliant": bool(payload.get("kvkk_data_minimized", True)),
             "face_confidence": round(face_conf, 2),
             "demographic_group": demographic_group,
             "embedding_dim": 512,
-            "watchlist_hit": search_res["is_watchlist_hit"],
-            "best_match": search_res["best_match"],
+            "watchlist_hit": is_hit,
+            "best_match": bm,
             "top_candidates": search_res["top_candidates"],
             "vector_db_backend": search_res["backend"],
             "search_latency_ms": search_res["search_latency_ms"],
+            "behavior_summary": behavior_summary,
             "aligned_face_b64": aligned_b64,
             "cropped_person_b64": crop_b64,
         }
